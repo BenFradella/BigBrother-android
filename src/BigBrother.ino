@@ -35,27 +35,30 @@ int redled = 8;
 double initialFixLat = 0;
 double initialFixLon = 0;
 
+int radius = 30; // radius of area in meters
+int margin = 10; // distance from edge of radius where LED turns yellow
 
-double latitudeToMeters(double d)
-{
-  return d/100 * 111319.490793;
-}
 
-double longitudeToMeters(double d)
+double getDistance(double lat1, double lon1, double lat2, double lon2)
 {
-  return d/100 * (111319.490793 * cos(GPS.latitude));
+  double p = 0.017453292519943295;    // PI / 180
+  double a = 0.5 - cos((lat2 - lat1) * p)/2 + 
+             cos(lat1 * p) * cos(lat2 * p) * 
+             (1 - cos((lon2 - lon1) * p))/2;
+
+  return 12742000 * asin(sqrt(a)); // 2 * radius of the earth (6371000m)
 }
 
 int areaStatus()
 {
   if (GPS.fix) {
-    double distance = sqrt(pow(latitudeToMeters(GPS.latitude - initialFixLat), 2) + pow(longitudeToMeters(GPS.longitude - initialFixLon), 2));
+    double distance = getDistance(initialFixLat, initialFixLon, GPS.latitude, GPS.longitude);
     Serial.print("distance from initial fix: "); Serial.println(distance);
     
-    if (distance > 30) {
+    if (distance > radius) {
       return 2;
     }
-    else if (distance > 20) {
+    else if (distance > radius-margin) {
       return 1;
     }
     else {
