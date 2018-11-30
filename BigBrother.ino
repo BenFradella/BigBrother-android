@@ -1,19 +1,3 @@
-// Test code for Ultimate GPS Using Hardware Serial (e.g. GPS Flora or FeatherWing)
-//
-// This code shows how to listen to the GPS module via polling. Best used with
-// Feathers or Flora where you have hardware Serial and no interrupt
-//
-// Tested and works great with the Adafruit GPS FeatherWing
-// ------> https://www.adafruit.com/products/3133
-// or Flora GPS
-// ------> https://www.adafruit.com/products/1059
-// but also works with the shield, breakout
-// ------> https://www.adafruit.com/products/1272
-// ------> https://www.adafruit.com/products/746
-// 
-// Pick one up today at the Adafruit electronics shop
-// and help support open source hardware & software! -ada
-     
 #include <Adafruit_GPS.h>
 
 // what's the name of the hardware serial port?
@@ -28,25 +12,35 @@ Adafruit_GPS GPS(&GPSSerial);
 
 uint32_t timer = millis();
 
-int greenled = 6;
-int yellowled = 7;
-int redled = 8;
+short int greenled = 6;
+short int yellowled = 7;
+short int redled = 8;
 
 double initialFixLat = 0;
 double initialFixLon = 0;
+short int acquisitions = 0;
 
-int radius = 30; // radius of area in meters
-int margin = 10; // distance from edge of radius where LED turns yellow
+float radius = 2; // radius of area in meters
+float margin = 0.5; // distance from edge of radius where LED turns yellow
 
 
 double getDistance(double lat1, double lon1, double lat2, double lon2)
 {
-  double p = 0.017453292519943295;    // PI / 180
-  double a = 0.5 - cos((lat2 - lat1) * p)/2 + 
-             cos(lat1 * p) * cos(lat2 * p) * 
-             (1 - cos((lon2 - lon1) * p))/2;
+  int R = 6371000; // Radius of the earth in m
+  double dLat = deg2rad(lat2-lat1);  // deg2rad below
+  double dLon = deg2rad(lon2-lon1); 
+  double a = 
+    sin(dLat/2) * sin(dLat/2) +
+    cos(deg2rad(lat1)) * cos(deg2rad(lat2)) * 
+    sin(dLon/2) * sin(dLon/2)
+    ; 
+  double c = 2 * atan2(sqrt(a), sqrt(1-a)); 
+  double d = R * c; // Distance in m
+  return d;
+}
 
-  return 12742000 * asin(sqrt(a)); // 2 * radius of the earth (6371000m)
+double deg2rad(double deg) {
+  return deg * (PI/180);
 }
 
 int areaStatus()
@@ -155,8 +149,8 @@ void loop() // run over and over again
   // if millis() or timer wraps around, we'll just reset it
   if (timer > millis()) timer = millis();
      
-  // approximately every 2 seconds or so, print out the current stats
-  if (millis() - timer > 2000) {
+  // approximately every second or so, print out the current stats
+  if (millis() - timer > 1000) {
     timer = millis(); // reset the timer
     Serial.print("\nTime: ");
     Serial.print(GPS.hour, DEC); Serial.print(':');
@@ -170,10 +164,6 @@ void loop() // run over and over again
     Serial.print("Fix: "); Serial.print((int)GPS.fix);
     Serial.print(" quality: "); Serial.println((int)GPS.fixquality);
     if (GPS.fix) {
-      if (initialFixLat == 0 && initialFixLon == 0) {
-        initialFixLat = GPS.latitude;
-        initialFixLon = GPS.longitude;
-      }
       Serial.print("Location: ");
       Serial.print(GPS.latitude, 4); Serial.print(GPS.lat);
       Serial.print(", ");
@@ -182,8 +172,23 @@ void loop() // run over and over again
       Serial.print("Angle: "); Serial.println(GPS.angle);
       Serial.print("Altitude: "); Serial.println(GPS.altitude);
       Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
-
-      getStatus();
+      if (initialFixLat == 0 && initialFixLon == 0) {
+        digitalWrite(greenled, HIGH);
+        digitalWrite(yellowled, HIGH);
+        digitalWrite(redled, HIGH);
+        delay(500);
+        digitalWrite(greenled, LOW);
+        digitalWrite(yellowled, LOW);
+        digitalWrite(redled, LOW);
+        
+        if (acquisitions++ == 4) {
+          initialFixLat = GPS.latitude;
+          initialFixLon = GPS.longitude;
+        }
+      }
+      else {
+        getStatus();
+      }
     }
   }
 }
