@@ -19,10 +19,23 @@ short int redled = 8;
 double initialFixLat = 0;
 double initialFixLon = 0;
 short int acquisitions = 0;
+short int numMeasurements = 50;
 
-float radius = 2; // radius of area in meters
-float margin = 0.5; // distance from edge of radius where LED turns yellow
+float radius = 5; // radius of area in meters
+float margin = 2.5; // distance from edge of radius where LED turns yellow
 
+int numSatellites = 0;
+bool goodZero = 0;
+
+
+double actual(double deg)
+{
+  int left = deg/100;
+  double right = double(deg/100) - left;
+  right *= 5;
+  right /= 3;
+  return double(left + right);
+}
 
 double getDistance(double lat1, double lon1, double lat2, double lon2)
 {
@@ -46,7 +59,7 @@ double deg2rad(double deg) {
 int areaStatus()
 {
   if (GPS.fix) {
-    double distance = getDistance(initialFixLat, initialFixLon, GPS.latitude, GPS.longitude);
+    double distance = getDistance(initialFixLat, initialFixLon, actual(GPS.latitude), actual(GPS.longitude));
     Serial.print("distance from initial fix: "); Serial.println(distance);
     
     if (distance > radius) {
@@ -135,21 +148,21 @@ void loop() // run over and over again
   // read data from the GPS in the 'main loop'
   char c = GPS.read();
   // if you want to debug, this is a good time to do it!
-  if (GPSECHO)
-    if (c) Serial.print(c);
+//  if (GPSECHO)
+//    if (c) Serial.print(c);
   // if a sentence is received, we can check the checksum, parse it...
   if (GPS.newNMEAreceived()) {
     // a tricky thing here is if we print the NMEA sentence, or data
     // we end up not listening and catching other sentences!
     // so be very wary if using OUTPUT_ALLDATA and trytng to print out data
-    Serial.println(GPS.lastNMEA()); // this also sets the newNMEAreceived() flag to false
+//    Serial.println(GPS.lastNMEA()); // this also sets the newNMEAreceived() flag to false
     if (!GPS.parse(GPS.lastNMEA())) // this also sets the newNMEAreceived() flag to false
       return; // we can fail to parse a sentence in which case we should just wait for another
   }
   // if millis() or timer wraps around, we'll just reset it
   if (timer > millis()) timer = millis();
      
-  // approximately every second or so, print out the current stats
+  // approximately every two seconds or so, print out the current stats
   if (millis() - timer > 1000) {
     timer = millis(); // reset the timer
     Serial.print("\nTime: ");
@@ -165,14 +178,20 @@ void loop() // run over and over again
     Serial.print(" quality: "); Serial.println((int)GPS.fixquality);
     if (GPS.fix) {
       Serial.print("Location: ");
-      Serial.print(GPS.latitude, 4); Serial.print(GPS.lat);
+      Serial.print(actual(GPS.latitude), 9); Serial.print('N');
       Serial.print(", ");
-      Serial.print(GPS.longitude, 4); Serial.println(GPS.lon);
+      Serial.print(actual(GPS.longitude), 9); Serial.println('W');
       Serial.print("Speed (knots): "); Serial.println(GPS.speed);
       Serial.print("Angle: "); Serial.println(GPS.angle);
       Serial.print("Altitude: "); Serial.println(GPS.altitude);
       Serial.print("Satellites: "); Serial.println((int)GPS.satellites);
-      if (initialFixLat == 0 && initialFixLon == 0) {
+      if (numSatellites*2 < (int)GPS.satellites ||
+          numSatellites > (int)GPS.satellites*2)
+      {
+        goodZero = 0;
+        numSatellites = (int)GPS.satellites;
+      }
+      if (goodZero == 0) {
         digitalWrite(greenled, HIGH);
         digitalWrite(yellowled, HIGH);
         digitalWrite(redled, HIGH);
@@ -181,9 +200,12 @@ void loop() // run over and over again
         digitalWrite(yellowled, LOW);
         digitalWrite(redled, LOW);
         
-        if (acquisitions++ == 4) {
-          initialFixLat = GPS.latitude;
-          initialFixLon = GPS.longitude;
+        if (acquisitions++ == numMeasurements) {
+          initialFixLat = actual(GPS.latitude);
+          initialFixLon = actual(GPS.longitude);
+          goodZero = 1;
+          numMeasurements /= 4;
+          acquisitions = 0;
         }
       }
       else {
