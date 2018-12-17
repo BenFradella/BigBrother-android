@@ -28,13 +28,12 @@ int numSatellites = 0;
 bool goodZero = 0;
 
 
-double actual(double deg)
+double actual(double NMEA)
 {
-  int left = deg/100;
-  double right = double(deg/100) - left;
-  right *= 5;
-  right /= 3;
-  return double(left + right);
+  double degs = int(NMEA/100); //all but the last two digits before the decimal point
+  double mins = int(NMEA - degs*100); //last two digits before decimal point
+  double secs = (NMEA-int(NMEA)); //all digits after decimal point
+  return degs + (mins/60) + (secs/60);
 }
 
 double getDistance(double lat1, double lon1, double lat2, double lon2)
