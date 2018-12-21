@@ -3,6 +3,7 @@ package edu.wichita.kotlinmaps
 import android.Manifest
 import android.Manifest.permission.ACCESS_FINE_LOCATION
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.location.Location
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
@@ -13,17 +14,21 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
-import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.MarkerOptions
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices.*
 import com.google.android.gms.tasks.Task
 import android.widget.Toast
 import android.util.Log
 import android.support.annotation.NonNull
+import android.view.View
+import android.widget.Button
+import android.widget.ImageButton
+import android.widget.ImageView
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.maps.model.*
 import com.google.android.gms.tasks.OnCompleteListener
-
+import java.lang.Math.pow
+import kotlin.math.pow
 
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
@@ -36,16 +41,16 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var mLocationPermissionsGranted = false
     private val mLocationPermissionRequestCode = 1234
 
+    private lateinit var mZone: ImageView
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_maps)
 
-        getLocationPermissions()
-    }
+        mZone = findViewById(R.id.zone_circle)
 
-    private fun initMap() {
-        val mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment?
-        mapFragment!!.getMapAsync(this)
+        getLocationPermissions()
     }
 
     private fun getLocationPermissions() {
@@ -77,15 +82,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
-    /**
-     * Manipulates the map once available.
-     * This callback is triggered when the map is ready to be used.
-     * This is where we can add markers or lines, add listeners or move the camera. In this case,
-     * we just add a marker near Sydney, Australia.
-     * If Google Play services is not installed on the device, the user will be prompted to install
-     * it inside the SupportMapFragment. This method will only be triggered once the user has
-     * installed Google Play services and returned to the app.
-     */
+    private fun initMap() {
+        val mapFragment = supportFragmentManager.findFragmentById(R.id.map) as SupportMapFragment?
+        mapFragment!!.getMapAsync(this)
+    }
+
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
 
@@ -99,6 +100,32 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             mMap.isMyLocationEnabled = true
             mMap.uiSettings.isMyLocationButtonEnabled = false
         }
+
+        mZone.setOnClickListener(object: View.OnClickListener {
+            override fun onClick(view: View) {
+                val zone: Circle = mMap.addCircle(
+                    CircleOptions()
+                        .center(mMap.cameraPosition.target)
+                        .radius(calculateVisibleRadius())
+                        .strokeColor(Color.RED)
+                        .fillColor(Color.GREEN)
+                        .clickable(true)
+                )
+            }
+        })
+    }
+
+    fun calculateVisibleRadius(): Double {
+        val distanceWidth = FloatArray(1)
+        var visibleRegion = mMap.getProjection().getVisibleRegion()
+        val farRight = visibleRegion.farRight
+        val farLeft = visibleRegion.farLeft
+        val nearRight = visibleRegion.nearRight
+        val nearLeft = visibleRegion.nearLeft
+        //calculate the distance between left <-> right of map on screen
+        Location.distanceBetween( (farLeft.latitude + nearLeft.latitude) / 2, farLeft.longitude, (farRight.latitude + nearRight.latitude) / 2, farRight.longitude, distanceWidth )
+        // visible radius is / 2  and /1000 in Km:
+         return distanceWidth[0].toDouble()/3.14
     }
 
     private fun getDeviceLatLng() {

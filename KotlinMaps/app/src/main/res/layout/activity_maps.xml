@@ -12,4 +12,17 @@
               tools:context=".MapsActivity"
               android:name="com.google.android.gms.maps.SupportMapFragment" />
 
+    <ImageView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_alignParentBottom="true"
+            android:layout_alignParentRight="true"
+            android:layout_marginBottom="10dp"
+            android:layout_marginRight="10dp"
+            android:id="@+id/zone_circle"
+            android:src="@drawable/ic_circle"
+    />
+
+
+
 </RelativeLayout>
