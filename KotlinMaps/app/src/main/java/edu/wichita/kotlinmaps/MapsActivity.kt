@@ -106,7 +106,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 val zone: Circle = mMap.addCircle(
                     CircleOptions()
                         .center(mMap.cameraPosition.target)
-                        .radius(calculateVisibleRadius())
+                        .radius(calculateVisibleRadius()/3.14)
                         .strokeColor(Color.RED)
                         .fillColor(Color.GREEN)
                         .clickable(true)
@@ -124,8 +124,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val nearLeft = visibleRegion.nearLeft
         //calculate the distance between left <-> right of map on screen
         Location.distanceBetween( (farLeft.latitude + nearLeft.latitude) / 2, farLeft.longitude, (farRight.latitude + nearRight.latitude) / 2, farRight.longitude, distanceWidth )
-        // visible radius is / 2  and /1000 in Km:
-         return distanceWidth[0].toDouble()/3.14
+        return distanceWidth[0].toDouble()
     }
 
     private fun getDeviceLatLng() {
