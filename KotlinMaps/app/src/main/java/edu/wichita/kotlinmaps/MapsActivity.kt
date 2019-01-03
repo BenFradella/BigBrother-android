@@ -29,6 +29,7 @@ import com.google.android.gms.maps.model.*
 import com.google.android.gms.tasks.OnCompleteListener
 import java.lang.Math.pow
 import kotlin.math.pow
+import kotlin.math.sqrt
 
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
@@ -42,6 +43,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private val mLocationPermissionRequestCode = 1234
 
     private lateinit var mZone: ImageView
+
+    var arrZone: MutableList<Circle> = ArrayList<Circle>()
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -103,28 +106,76 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         mZone.setOnClickListener(object: View.OnClickListener {
             override fun onClick(view: View) {
-                val zone: Circle = mMap.addCircle(
-                    CircleOptions()
-                        .center(mMap.cameraPosition.target)
-                        .radius(calculateVisibleRadius()/3.14)
-                        .strokeColor(Color.RED)
-                        .fillColor(Color.GREEN)
-                        .clickable(true)
+                arrZone.add(
+                    mMap.addCircle(
+                        CircleOptions()
+                            .center(mMap.cameraPosition.target)
+                            .radius(calculateVisibleWidth()/3.14)
+                            .strokeColor(0x77ff0000)
+                            .fillColor(0x7700ff00)
+                            .clickable(true)
+                    )
                 )
             }
         })
     }
 
-    fun calculateVisibleRadius(): Double {
-        val distanceWidth = FloatArray(1)
-        var visibleRegion = mMap.getProjection().getVisibleRegion()
+    fun calculateVisibleWidth(): Double {
+        val nearWidth = FloatArray(1)
+        val farWidth = FloatArray(1)
+
+        val visibleRegion = mMap.projection.visibleRegion
         val farRight = visibleRegion.farRight
         val farLeft = visibleRegion.farLeft
         val nearRight = visibleRegion.nearRight
         val nearLeft = visibleRegion.nearLeft
-        //calculate the distance between left <-> right of map on screen
-        Location.distanceBetween( (farLeft.latitude + nearLeft.latitude) / 2, farLeft.longitude, (farRight.latitude + nearRight.latitude) / 2, farRight.longitude, distanceWidth )
-        return distanceWidth[0].toDouble()
+
+        Location.distanceBetween(
+            nearLeft.latitude,
+            nearLeft.longitude,
+            nearRight.latitude,
+            nearRight.longitude,
+            nearWidth
+        )
+        Location.distanceBetween(
+            farLeft.latitude,
+            farLeft.longitude,
+            farRight.latitude,
+            farRight.longitude,
+            farWidth
+        )
+
+        if ( nearWidth[0] == farWidth[0] ) {
+            return nearWidth[0].toDouble()
+        }
+        else {
+            val fromNear = FloatArray(1)
+            val fromFar = FloatArray(1)
+
+            val center = mMap.cameraPosition.target
+
+            Location.distanceBetween(
+                center.latitude,
+                center.longitude,
+                (nearLeft.latitude + nearRight.latitude) / 2,
+                (nearLeft.longitude + nearRight.longitude) / 2,
+                fromNear
+            )
+            Location.distanceBetween(
+                center.latitude,
+                center.longitude,
+                (farLeft.latitude + farRight.latitude) / 2,
+                (farLeft.longitude + farRight.longitude) / 2,
+                fromFar
+            )
+
+            val height = fromNear[0] + fromFar[0]
+
+            // weighted average between nearWidth and farWidth to get the width at the center of the screen
+            val midWidth = (fromFar[0]/height)*nearWidth[0] + (fromNear[0]/height)*farWidth[0]
+
+            return midWidth.toDouble()
+        }
     }
 
     private fun getDeviceLatLng() {
@@ -133,7 +184,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         try {
             if (mLocationPermissionsGranted) {
 
-                val location = mFusedLocationProviderClient.getLastLocation()
+                val location = mFusedLocationProviderClient.lastLocation
                 location.addOnCompleteListener(object: OnCompleteListener<Location> {
                     override fun onComplete(task: Task<Location>) {
                         if (task.isSuccessful) {
