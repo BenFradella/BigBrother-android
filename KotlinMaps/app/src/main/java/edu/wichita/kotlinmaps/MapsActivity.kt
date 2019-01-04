@@ -43,15 +43,17 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private val mLocationPermissionRequestCode = 1234
 
     private lateinit var mZone: ImageView
+    private lateinit var mDelete: ImageView
 
-    var arrZone: MutableList<Circle> = ArrayList<Circle>()
+    var arrZone: MutableList<Circle> = ArrayList()
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_maps)
 
-        mZone = findViewById(R.id.zone_circle)
+        mZone = findViewById(R.id.circle_button)
+        mDelete = findViewById(R.id.delete_button)
 
         getLocationPermissions()
     }
@@ -106,54 +108,141 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         mZone.setOnClickListener(object: View.OnClickListener {
             override fun onClick(view: View) {
-                arrZone.add(
-                    mMap.addCircle(
-                        CircleOptions()
-                            .center(mMap.cameraPosition.target)
-                            .radius(calculateVisibleWidth()/3.14)
-                            .strokeColor(0x77ff0000)
-                            .fillColor(0x7700ff00)
-                            .clickable(true)
-                    )
-                )
+                drawCircle()
             }
         })
     }
 
-    fun calculateVisibleWidth(): Double {
-        val nearWidth = FloatArray(1)
-        val farWidth = FloatArray(1)
+    private fun drawCircle() {
+        arrZone.add(
+            mMap.addCircle(
+                CircleOptions()
+                    .center(mMap.cameraPosition.target)
+                    .radius(calculateVisibleWidth()/3.14)
+                    .strokeColor(0x77ff0000)
+                    .fillColor(0x7700ff00)
+                    .clickable(true)
+            )
+        )
+        mMap.setOnCircleClickListener(object: GoogleMap.OnCircleClickListener {
+            override fun onCircleClick(circle: Circle) {
+                mZone.setBackgroundResource(R.drawable.ic_delete)
 
+                mZone.setOnClickListener(object: View.OnClickListener {
+                    override fun onClick(view: View) {
+                        arrZone.remove(circle)
+                        circle.remove()
+
+                        for ( zone in arrZone ) {
+                            zone.isClickable = true
+                        }
+
+                        mMap.setOnMapClickListener(null)
+                        mMap.setOnMapLongClickListener(null)
+                        mZone.setOnClickListener(object: View.OnClickListener {
+                            override fun onClick(view: View) {
+                                drawCircle()
+                            }
+                        })
+                    }
+                })
+
+                for ( zone in arrZone ) {
+                    zone.isClickable = false
+                }
+                circle.fillColor = 0x770000ff
+
+                mMap.setOnMapClickListener(object: GoogleMap.OnMapClickListener {
+                    override fun onMapClick(position: LatLng) {
+                        val center = circle.center
+                        val distance = FloatArray(1)
+
+                        Location.distanceBetween(
+                            position.latitude,
+                            position.longitude,
+                            center.latitude,
+                            center.longitude,
+                            distance
+                        )
+
+                        circle.radius = distance[0].toDouble()
+                        circle.fillColor = 0x7700ff00
+                        for ( zone in arrZone ) {
+                            zone.isClickable = true
+                        }
+
+                        mMap.setOnMapClickListener(null)
+                        mMap.setOnMapLongClickListener(null)
+                        mZone.setOnClickListener(object: View.OnClickListener {
+                            override fun onClick(view: View) {
+                                drawCircle()
+                            }
+                        })
+                    }
+                })
+
+                mMap.setOnMapLongClickListener(object: GoogleMap.OnMapLongClickListener {
+                    override fun onMapLongClick(position: LatLng) {
+                        circle.center = position
+                        circle.fillColor = 0x7700ff00
+                        for ( zone in arrZone ) {
+                            zone.isClickable = true
+                        }
+
+                        mMap.setOnMapClickListener(null)
+                        mMap.setOnMapLongClickListener(null)
+                        mZone.setOnClickListener(object: View.OnClickListener {
+                            override fun onClick(view: View) {
+                                drawCircle()
+                            }
+                        })
+                    }
+                })
+            }
+        })
+    }
+
+    private fun calculateVisibleWidth(): Double {
         val visibleRegion = mMap.projection.visibleRegion
         val farRight = visibleRegion.farRight
         val farLeft = visibleRegion.farLeft
         val nearRight = visibleRegion.nearRight
         val nearLeft = visibleRegion.nearLeft
 
-        Location.distanceBetween(
-            nearLeft.latitude,
-            nearLeft.longitude,
-            nearRight.latitude,
-            nearRight.longitude,
-            nearWidth
-        )
-        Location.distanceBetween(
-            farLeft.latitude,
-            farLeft.longitude,
-            farRight.latitude,
-            farRight.longitude,
-            farWidth
-        )
+        if ( mMap.cameraPosition.tilt.toDouble() == 0.0 ) {
+            val midWidth = FloatArray(1)
 
-        if ( nearWidth[0] == farWidth[0] ) {
-            return nearWidth[0].toDouble()
+            Location.distanceBetween(
+                (nearLeft.latitude + farLeft.latitude) / 2,
+                (nearLeft.longitude + farLeft.longitude) / 2,
+                (nearRight.latitude + farRight.latitude) / 2,
+                (nearRight.longitude + farRight.longitude) / 2,
+                midWidth
+            )
+
+            return midWidth[0].toDouble()
         }
         else {
+            val nearWidth = FloatArray(1)
+            val farWidth = FloatArray(1)
             val fromNear = FloatArray(1)
             val fromFar = FloatArray(1)
-
             val center = mMap.cameraPosition.target
 
+            Location.distanceBetween(
+                nearLeft.latitude,
+                nearLeft.longitude,
+                nearRight.latitude,
+                nearRight.longitude,
+                nearWidth
+            )
+            Location.distanceBetween(
+                farLeft.latitude,
+                farLeft.longitude,
+                farRight.latitude,
+                farRight.longitude,
+                farWidth
+            )
             Location.distanceBetween(
                 center.latitude,
                 center.longitude,
