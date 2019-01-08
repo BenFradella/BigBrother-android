@@ -42,8 +42,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var mLocationPermissionsGranted = false
     private val mLocationPermissionRequestCode = 1234
 
-    private lateinit var mZone: ImageView
-    private lateinit var mDelete: ImageView
+    private lateinit var mZone: ImageButton
 
     var arrZone: MutableList<Circle> = ArrayList()
 
@@ -53,7 +52,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         setContentView(R.layout.activity_maps)
 
         mZone = findViewById(R.id.circle_button)
-        mDelete = findViewById(R.id.delete_button)
 
         getLocationPermissions()
     }
@@ -74,7 +72,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         mLocationPermissionsGranted = false
 
         if (requestCode == mLocationPermissionRequestCode) {
-            if (grantResults.size > 0) {
+            if (grantResults.isNotEmpty()) {
                 for (permission in grantResults) {
                     if (permission != PackageManager.PERMISSION_GRANTED) {
                         mLocationPermissionsGranted = false
@@ -106,11 +104,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             mMap.uiSettings.isMyLocationButtonEnabled = false
         }
 
-        mZone.setOnClickListener(object: View.OnClickListener {
-            override fun onClick(view: View) {
-                drawCircle()
-            }
-        })
+        mZone.setOnClickListener { drawCircle() }
     }
 
     private fun drawCircle() {
@@ -124,82 +118,56 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     .clickable(true)
             )
         )
-        mMap.setOnCircleClickListener(object: GoogleMap.OnCircleClickListener {
-            override fun onCircleClick(circle: Circle) {
-                mZone.setBackgroundResource(R.drawable.ic_delete)
+        mMap.setOnCircleClickListener { circle ->
+            mZone.setImageResource(R.drawable.ic_delete)
 
-                mZone.setOnClickListener(object: View.OnClickListener {
-                    override fun onClick(view: View) {
-                        arrZone.remove(circle)
-                        circle.remove()
-
-                        for ( zone in arrZone ) {
-                            zone.isClickable = true
-                        }
-
-                        mMap.setOnMapClickListener(null)
-                        mMap.setOnMapLongClickListener(null)
-                        mZone.setOnClickListener(object: View.OnClickListener {
-                            override fun onClick(view: View) {
-                                drawCircle()
-                            }
-                        })
-                    }
-                })
-
-                for ( zone in arrZone ) {
-                    zone.isClickable = false
-                }
-                circle.fillColor = 0x770000ff
-
-                mMap.setOnMapClickListener(object: GoogleMap.OnMapClickListener {
-                    override fun onMapClick(position: LatLng) {
-                        val center = circle.center
-                        val distance = FloatArray(1)
-
-                        Location.distanceBetween(
-                            position.latitude,
-                            position.longitude,
-                            center.latitude,
-                            center.longitude,
-                            distance
-                        )
-
-                        circle.radius = distance[0].toDouble()
-                        circle.fillColor = 0x7700ff00
-                        for ( zone in arrZone ) {
-                            zone.isClickable = true
-                        }
-
-                        mMap.setOnMapClickListener(null)
-                        mMap.setOnMapLongClickListener(null)
-                        mZone.setOnClickListener(object: View.OnClickListener {
-                            override fun onClick(view: View) {
-                                drawCircle()
-                            }
-                        })
-                    }
-                })
-
-                mMap.setOnMapLongClickListener(object: GoogleMap.OnMapLongClickListener {
-                    override fun onMapLongClick(position: LatLng) {
-                        circle.center = position
-                        circle.fillColor = 0x7700ff00
-                        for ( zone in arrZone ) {
-                            zone.isClickable = true
-                        }
-
-                        mMap.setOnMapClickListener(null)
-                        mMap.setOnMapLongClickListener(null)
-                        mZone.setOnClickListener(object: View.OnClickListener {
-                            override fun onClick(view: View) {
-                                drawCircle()
-                            }
-                        })
-                    }
-                })
+            for ( zone in arrZone ) {
+                zone.isClickable = false
             }
-        })
+            circle.fillColor = 0x770000ff
+
+            fun backToNormal() {
+                circle.fillColor = 0x7700ff00
+                for ( zone in arrZone ) {
+                    zone.isClickable = true
+                }
+
+                mMap.setOnMapClickListener(null)
+                mMap.setOnMapLongClickListener(null)
+                mZone.setOnClickListener { drawCircle() }
+                mZone.setImageResource(R.drawable.ic_circle_green)
+            }
+
+            mZone.setOnClickListener {
+                arrZone.remove(circle)
+                circle.remove()
+
+                backToNormal()
+            }
+
+            mMap.setOnMapClickListener { position ->
+                val center = circle.center
+                val distance = FloatArray(1)
+
+                Location.distanceBetween(
+                    position.latitude,
+                    position.longitude,
+                    center.latitude,
+                    center.longitude,
+                    distance
+                )
+
+                circle.radius = distance[0].toDouble()
+
+                backToNormal()
+            }
+
+            mMap.setOnMapLongClickListener { position ->
+                circle.center = position
+
+                backToNormal()
+            }
+        }
     }
 
     private fun calculateVisibleWidth(): Double {
@@ -274,15 +242,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             if (mLocationPermissionsGranted) {
 
                 val location = mFusedLocationProviderClient.lastLocation
-                location.addOnCompleteListener(object: OnCompleteListener<Location> {
-                    override fun onComplete(task: Task<Location>) {
-                        if (task.isSuccessful) {
-                            val currentLocation = task.result
+                location.addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        val currentLocation = task.result
 
-                            moveCamera(LatLng(currentLocation!!.latitude, currentLocation.longitude), 15f)
-                        }
+                        moveCamera(LatLng(currentLocation!!.latitude, currentLocation.longitude), 15f)
                     }
-                })
+                }
             }
         } catch (e: SecurityException) {
             Log.e("MapActivity", "getDeviceLocation: SecurityException: " + e.message)
