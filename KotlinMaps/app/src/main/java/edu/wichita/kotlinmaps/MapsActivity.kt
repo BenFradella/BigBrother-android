@@ -1,13 +1,16 @@
 package edu.wichita.kotlinmaps
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
+import android.nfc.NfcAdapter
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
+import android.widget.Adapter
 import android.widget.ImageButton
 import android.widget.TextView
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -20,21 +23,12 @@ import com.google.android.gms.maps.model.Circle
 import com.google.android.gms.maps.model.CircleOptions
 import com.google.android.gms.maps.model.LatLng
 
-import java.io.IOException
-import java.io.OutputStream
-import java.io.PrintStream
-import java.net.InetAddress
-import java.net.NetworkInterface
-import java.net.ServerSocket
-import java.net.Socket
-import java.net.SocketException
-import java.util.Enumeration
-
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private lateinit var mMap: GoogleMap
     private lateinit var mFusedLocationProviderClient: FusedLocationProviderClient
+    private lateinit var mNfcAdapter: NfcAdapter
 
     private var mFinePermission = Manifest.permission.ACCESS_FINE_LOCATION
     private var mCoarsePermission = Manifest.permission.ACCESS_COARSE_LOCATION
@@ -46,15 +40,21 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     var arrZone: MutableList<Circle> = ArrayList()
 
     private class BigBrother(IpAddr: String) {
-        val ipAddress = IpAddr
-        lateinit var zone: Circle
+        val ipAddress: String = IpAddr
         lateinit var location: LatLng
-
-        fun sendCircle() {
-            //tell the device what the center and radius of it's Circle are
-        }
     }
 
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_maps)
+
+        mZone = findViewById(R.id.circle_button)
+
+        getLocationPermissions()
+
+        mNfcAdapter = NfcAdapter.getDefaultAdapter(this)
+    }
 
     private fun getLocationPermissions() {
         var permissions = arrayOf(mFinePermission, mCoarsePermission)
@@ -258,73 +258,5 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private fun moveCamera(latLng: LatLng, zoom: Float) {
         Log.d("MapActivity","moveCamera: moving the camera to: lat: " + latLng.latitude + ", lng: " + latLng.longitude)
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoom))
-    }
-
-    private lateinit var serverSocket: ServerSocket
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_maps)
-
-        mZone = findViewById(R.id.circle_button)
-
-        getLocationPermissions()
-
-
-
-        val socketServerThread = Thread(SocketServerThread())
-        socketServerThread.start()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-
-        try {
-            serverSocket.close()
-        } catch (e: IOException) {
-            e.printStackTrace()
-        }
-    }
-
-    private class SocketServerThread : Thread() {
-        val socketServerPORT = 8080
-        var count = 0
-
-        override fun run() {
-            try {
-                serverSocket = ServerSocket(socketServerPORT)
-
-                while (true) {
-                    val socket: Socket = serverSocket.accept()
-                    count++
-
-                    val socketServerReplyThread = SocketServerReplyThread(
-                        socket, count
-                    )
-                    socketServerReplyThread.run()
-                }
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
-        }
-    }
-
-    private class SocketServerReplyThread(socket: Socket, c: Int) : Thread() {
-        private var hostThreadSocket = socket
-        var cnt = c
-
-        override fun run() {
-            val outputStream: OutputStream
-            val msgReply = "Hello from Android, you are #$cnt"
-
-            try {
-                outputStream = hostThreadSocket.getOutputStream()
-                val printStream = PrintStream(outputStream)
-                printStream.print(msgReply)
-                printStream.close()
-            } catch (e: IOException) {
-                e.printStackTrace()
-            }
-        }
     }
 }
