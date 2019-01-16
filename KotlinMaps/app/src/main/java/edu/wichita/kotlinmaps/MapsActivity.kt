@@ -1,18 +1,21 @@
 package edu.wichita.kotlinmaps
 
 import android.Manifest
+import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
+import android.nfc.NdefMessage
+import android.nfc.NdefRecord
 import android.nfc.NfcAdapter
+import android.nfc.Tag
+import android.nfc.tech.*
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
-import android.widget.Adapter
 import android.widget.ImageButton
-import android.widget.TextView
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -22,6 +25,7 @@ import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.Circle
 import com.google.android.gms.maps.model.CircleOptions
 import com.google.android.gms.maps.model.LatLng
+import kotlin.jvm.javaClass
 
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
@@ -29,6 +33,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var mMap: GoogleMap
     private lateinit var mFusedLocationProviderClient: FusedLocationProviderClient
     private lateinit var mNfcAdapter: NfcAdapter
+    private lateinit var mPendingIntent: PendingIntent
 
     private var mFinePermission = Manifest.permission.ACCESS_FINE_LOCATION
     private var mCoarsePermission = Manifest.permission.ACCESS_COARSE_LOCATION
@@ -54,10 +59,102 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         getLocationPermissions()
 
         mNfcAdapter = NfcAdapter.getDefaultAdapter(this)
+        mPendingIntent = PendingIntent.getActivity(
+            this, 0, Intent(
+                this,
+                javaClass
+            ).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0
+        )
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mNfcAdapter.enableForegroundDispatch(this, mPendingIntent, null, null)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        mNfcAdapter.disableForegroundDispatch(this)
+    }
+
+    override fun onNewIntent(intent: Intent){
+        val tag = getTagInfo(intent)
+        if ( tag != null ) {
+            // handle a new device
+        }
+    }
+    private fun getTagInfo(intent: Intent): String? {
+        val tag: Tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG)
+
+        val techList = tag.techList
+        for ( i in techList ) when ( i ) {
+            MifareClassic::class.java.name -> {
+                val mifareClassicTag = MifareClassic.get(tag)
+
+                when ( mifareClassicTag.type ) {
+                    MifareClassic.TYPE_CLASSIC -> {
+                        //Type Classic
+                    }
+                    MifareClassic.TYPE_PLUS -> {
+                        //Type Plus
+                    }
+                    MifareClassic.TYPE_PRO -> {
+                        //Type Pro
+                    }
+                }
+            }
+
+            MifareUltralight::class.java.name -> {
+                val mifareUlTag = MifareUltralight.get(tag)
+
+                when ( mifareUlTag.type ) {
+                    MifareUltralight.TYPE_ULTRALIGHT -> {
+                        // ?
+                    }
+                    MifareUltralight.TYPE_ULTRALIGHT_C -> {
+                        // ?
+                    }
+                }
+            }
+
+            IsoDep::class.java.name -> {
+                val iosDepTag = IsoDep.get(tag)
+            }
+
+            Ndef::class.java.name -> {
+                val ndef = Ndef.get(tag)
+                try{
+                    ndef.connect()
+
+                    val messages = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES)
+
+                    if (messages != null) {
+                        val ndefMessages = Array<NdefMessage?>(messages.size){null}
+                        for ( i in 0 until messages.size) {
+                            ndefMessages[i] = messages[i] as NdefMessage
+                        }
+                        val record: NdefRecord = ndefMessages[0]!!.records[0]
+                        val payloadText = record.payload.toString()
+
+                        ndef.close()
+
+                        return payloadText
+                    }
+                }
+                catch (e: Exception) {
+//                    Toast.makeText(getApplicationContext(), "Cannot Read From Tag.", Toast.LENGTH_LONG).show()
+                }
+            }
+
+            NdefFormatable::class.java.name -> {
+                val ndefFormatableTag = NdefFormatable.get(tag)
+            }
+        }
+        return null
     }
 
     private fun getLocationPermissions() {
-        var permissions = arrayOf(mFinePermission, mCoarsePermission)
+        val permissions = arrayOf(mFinePermission, mCoarsePermission)
 
         if (ContextCompat.checkSelfPermission(this.applicationContext, mFinePermission) == PackageManager.PERMISSION_GRANTED &&
             ContextCompat.checkSelfPermission(this.applicationContext, mCoarsePermission) == PackageManager.PERMISSION_GRANTED) {
