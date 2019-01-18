@@ -16,6 +16,7 @@ import android.support.v4.content.ContextCompat
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
 import android.widget.ImageButton
+import android.widget.Toast
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -80,7 +81,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onNewIntent(intent: Intent){
         val tag = getTagInfo(intent)
         if ( tag != null ) {
-            // handle a new device
+            //todo - handle a new BigBrother device
+                //todo - connect to its ip address here or in the BigBrother init function
         }
     }
     private fun getTagInfo(intent: Intent): String? {
@@ -130,8 +132,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
                     if (messages != null) {
                         val ndefMessages = Array<NdefMessage?>(messages.size){null}
-                        for ( i in 0 until messages.size) {
-                            ndefMessages[i] = messages[i] as NdefMessage
+                        for ( index in 0 until messages.size) {
+                            ndefMessages[index] = messages[index] as NdefMessage
                         }
                         val record: NdefRecord = ndefMessages[0]!!.records[0]
                         val payloadText = record.payload.toString()
@@ -142,7 +144,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     }
                 }
                 catch (e: Exception) {
-//                    Toast.makeText(getApplicationContext(), "Cannot Read From Tag.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(applicationContext, "Cannot Read From Tag.", Toast.LENGTH_LONG).show()
                 }
             }
 
