@@ -26,6 +26,8 @@ import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.Circle
 import com.google.android.gms.maps.model.CircleOptions
 import com.google.android.gms.maps.model.LatLng
+import java.net.InetAddress
+import java.net.ServerSocket
 import kotlin.jvm.javaClass
 
 
@@ -33,6 +35,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private lateinit var mMap: GoogleMap
     private lateinit var mFusedLocationProviderClient: FusedLocationProviderClient
+
     private lateinit var mNfcAdapter: NfcAdapter
     private lateinit var mPendingIntent: PendingIntent
 
@@ -43,10 +46,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private lateinit var mZone: ImageButton
 
-    var arrZone: MutableList<Circle> = ArrayList()
+    private var arrZone: MutableList<Circle> = ArrayList()
+    private var arrBigBrother: MutableList<BigBrother> = ArrayList()
 
-    private class BigBrother(IpAddr: String) {
-        val ipAddress: String = IpAddr
+    private class BigBrother(val name: String) {
         lateinit var location: LatLng
     }
 
@@ -61,10 +64,13 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         mNfcAdapter = NfcAdapter.getDefaultAdapter(this)
         mPendingIntent = PendingIntent.getActivity(
-            this, 0, Intent(
+            this,
+            0,
+            Intent(
                 this,
                 javaClass
-            ).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0
+            ).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            0
         )
     }
 
@@ -81,8 +87,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onNewIntent(intent: Intent){
         val tag = getTagInfo(intent)
         if ( tag != null ) {
-            //todo - handle a new BigBrother device
-                //todo - connect to its ip address here or in the BigBrother init function
+            // todo - handle a new BigBrother device with name == tag
+            arrBigBrother.add(BigBrother(tag))
+                // todo - get the last known location of the device from the server
+                // todo - and tell the server where the device is allowed to be
         }
     }
     private fun getTagInfo(intent: Intent): String? {
@@ -91,6 +99,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         val techList = tag.techList
         for ( i in techList ) when ( i ) {
             MifareClassic::class.java.name -> {
+                // not what we're interested in. Probably just do nothing in this block
                 val mifareClassicTag = MifareClassic.get(tag)
 
                 when ( mifareClassicTag.type ) {
@@ -107,6 +116,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             }
 
             MifareUltralight::class.java.name -> {
+                // not what we're interested in. Probably just do nothing in this block
                 val mifareUlTag = MifareUltralight.get(tag)
 
                 when ( mifareUlTag.type ) {
@@ -120,6 +130,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             }
 
             IsoDep::class.java.name -> {
+                // not what we're interested in. Probably just do nothing in this block
                 val iosDepTag = IsoDep.get(tag)
             }
 
@@ -136,11 +147,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                             ndefMessages[index] = messages[index] as NdefMessage
                         }
                         val record: NdefRecord = ndefMessages[0]!!.records[0]
-                        val payloadText = record.payload.toString()
+                        val payloadText = record.payload
 
                         ndef.close()
 
-                        return payloadText
+                        return "$payloadText"
                     }
                 }
                 catch (e: Exception) {
@@ -149,6 +160,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             }
 
             NdefFormatable::class.java.name -> {
+                // not what we're interested in. Probably just do nothing in this block
                 val ndefFormatableTag = NdefFormatable.get(tag)
             }
         }
