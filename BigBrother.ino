@@ -21,8 +21,8 @@ double initialFixLon = 0;
 short int acquisitions = 0;
 short int numMeasurements = 50;
 
-float radius = 5; // radius of area in meters
-float margin = 2.5; // distance from edge of radius where LED turns yellow
+float radius = 5;                       // radius of area in meters
+float margin = 2.5;                     // distance from edge of radius where LED turns yellow
 
 int numSatellites = 0;
 bool goodZero = 0;
@@ -30,16 +30,15 @@ bool goodZero = 0;
 
 double actual(double NMEA)
 {
-  double degs = int(NMEA/100); //all but the last two digits before the decimal point
-  double mins = int(NMEA - degs*100); //last two digits before decimal point
-  double secs = (NMEA-int(NMEA)); //all digits after decimal point
-  return degs + (mins/60) + (secs/60);
+  int degs = int(NMEA/100);             // move the decimal point to the left twice and then cut off everything after it
+  double mins = NMEA - degs*100;        // move the decimal point to the left twice and then cut off everything before it
+  return degs + (mins/60);              // actual latitude/longitude in degrees
 }
 
 double getDistance(double lat1, double lon1, double lat2, double lon2)
 {
-  int R = 6371000; // Radius of the earth in m
-  double dLat = deg2rad(lat2-lat1);  // deg2rad below
+  int R = 6371000;                      // Radius of the earth in m
+  double dLat = deg2rad(lat2-lat1);     // deg2rad below
   double dLon = deg2rad(lon2-lon1); 
   double a = 
     sin(dLat/2) * sin(dLat/2) +
