@@ -32,7 +32,7 @@ double actual(double NMEA)
 {
   int degs = int(NMEA/100);             // move the decimal point to the left twice and then cut off everything after it
   double mins = NMEA - degs*100;        // move the decimal point to the left twice and then cut off everything before it
-  return degs + (mins/60);              // actual latitude/longitude in degrees
+  return double(degs) + (mins/60);      // actual latitude/longitude in degrees
 }
 
 double getDistance(double lat1, double lon1, double lat2, double lon2)
