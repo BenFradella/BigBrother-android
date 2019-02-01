@@ -87,7 +87,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onNewIntent(intent: Intent){
         val tag = getTagInfo(intent)
         if ( tag != null ) {
-            // todo - handle a new BigBrother device with name == tag
+            // handle a new BigBrother device with name == tag
             arrBigBrother.add(BigBrother(tag))
                 // todo - get the last known location of the device from the server
                 // todo - and tell the server where the device is allowed to be
