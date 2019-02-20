@@ -29,6 +29,8 @@ import com.google.android.gms.maps.model.LatLng
 import java.net.InetAddress
 import java.net.ServerSocket
 import kotlin.jvm.javaClass
+import java.io.*
+import java.net.Socket
 
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
@@ -49,7 +51,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var arrZone: MutableList<Circle> = ArrayList()
     private var arrBigBrother: MutableList<BigBrother> = ArrayList()
 
-    private class BigBrother(val name: String) {
+    private data class BigBrother(val name: String) {
         lateinit var location: LatLng
     }
 
@@ -72,6 +74,26 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             ).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             0
         )
+
+        try{
+            val socket = Socket("206.189.199.185",6969)
+            val inStream = DataInputStream(socket.getInputStream())
+            val outStream = DataOutputStream(socket.getOutputStream())
+            val br = BufferedReader(InputStreamReader(System.`in`))
+            var clientMessage = "Hello"; var serverMessage = ""
+            while(clientMessage != "bye"){
+                clientMessage = br.readLine()
+                outStream.writeUTF(clientMessage)
+                outStream.flush()
+                serverMessage = inStream.readUTF()
+                System.out.println("From Server: $serverMessage")
+            }
+            outStream.close()
+            outStream.close()
+            socket.close()
+        } catch(e: Exception){
+            Toast.makeText(applicationContext, "$e", Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onResume() {
@@ -87,6 +109,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onNewIntent(intent: Intent){
         val tag = getTagInfo(intent)
         if ( tag != null ) {
+            Toast.makeText(applicationContext, "Scanned tag: $tag", Toast.LENGTH_LONG).show()
             // handle a new BigBrother device with name == tag
             arrBigBrother.add(BigBrother(tag))
                 // todo - get the last known location of the device from the server
@@ -95,47 +118,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
     private fun getTagInfo(intent: Intent): String? {
         val tag: Tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG)
-
         val techList = tag.techList
+
         for ( i in techList ) when ( i ) {
-            MifareClassic::class.java.name -> {
-                // not what we're interested in. Probably just do nothing in this block
-                val mifareClassicTag = MifareClassic.get(tag)
-
-                when ( mifareClassicTag.type ) {
-                    MifareClassic.TYPE_CLASSIC -> {
-                        //Type Classic
-                    }
-                    MifareClassic.TYPE_PLUS -> {
-                        //Type Plus
-                    }
-                    MifareClassic.TYPE_PRO -> {
-                        //Type Pro
-                    }
-                }
-            }
-
-            MifareUltralight::class.java.name -> {
-                // not what we're interested in. Probably just do nothing in this block
-                val mifareUlTag = MifareUltralight.get(tag)
-
-                when ( mifareUlTag.type ) {
-                    MifareUltralight.TYPE_ULTRALIGHT -> {
-                        // ?
-                    }
-                    MifareUltralight.TYPE_ULTRALIGHT_C -> {
-                        // ?
-                    }
-                }
-            }
-
-            IsoDep::class.java.name -> {
-                // not what we're interested in. Probably just do nothing in this block
-                val iosDepTag = IsoDep.get(tag)
-            }
-
             Ndef::class.java.name -> {
                 val ndef = Ndef.get(tag)
+
                 try{
                     ndef.connect()
 
@@ -146,22 +134,21 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         for ( index in 0 until messages.size) {
                             ndefMessages[index] = messages[index] as NdefMessage
                         }
+
                         val record: NdefRecord = ndefMessages[0]!!.records[0]
-                        val payloadText = record.payload
+                        val msg = record.payload.drop(3).toByteArray()
+                        // Drop the first three characters. They're extras saying that they're the record's payload and
+                        // that they use english characters, I think.
+                        val payloadText = String(msg, charset("UTF-8"))
 
                         ndef.close()
 
-                        return "$payloadText"
+                        return payloadText
                     }
                 }
                 catch (e: Exception) {
-                    Toast.makeText(applicationContext, "Cannot Read From Tag.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(applicationContext, "Cannot Read From Ndef Tag.", Toast.LENGTH_LONG).show()
                 }
-            }
-
-            NdefFormatable::class.java.name -> {
-                // not what we're interested in. Probably just do nothing in this block
-                val ndefFormatableTag = NdefFormatable.get(tag)
             }
         }
         return null
