@@ -31,6 +31,7 @@ import java.net.ServerSocket
 import kotlin.jvm.javaClass
 import java.io.*
 import java.net.Socket
+import java.net.UnknownHostException
 
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
@@ -48,11 +49,30 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private lateinit var mZone: ImageButton
 
+    private var socket: Socket? = null
+    private val SERVERPORT = 6969
+    private val SERVER_IP = "206.189.199.185"
+
     private var arrZone: MutableList<Circle> = ArrayList()
     private var arrBigBrother: MutableList<BigBrother> = ArrayList()
 
     private data class BigBrother(val name: String) {
         lateinit var location: LatLng
+    }
+
+    inner class ClientThread : Runnable {
+        override fun run() {
+            try {
+//                val serverAddr: InetAddress = InetAddress.getByName(SERVER_IP)
+
+                socket = Socket(SERVER_IP, SERVERPORT)
+
+            } catch (e1: UnknownHostException) {
+                e1.printStackTrace()
+            } catch (e1: IOException) {
+                e1.printStackTrace()
+            }
+        }
     }
 
 
@@ -75,25 +95,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             0
         )
 
-        try{
-            val socket = Socket("206.189.199.185",6969)
-            val inStream = DataInputStream(socket.getInputStream())
-            val outStream = DataOutputStream(socket.getOutputStream())
-            val br = BufferedReader(InputStreamReader(System.`in`))
-            var clientMessage = "Hello"; var serverMessage = ""
-            while(clientMessage != "bye"){
-                clientMessage = br.readLine()
-                outStream.writeUTF(clientMessage)
-                outStream.flush()
-                serverMessage = inStream.readUTF()
-                System.out.println("From Server: $serverMessage")
-            }
-            outStream.close()
-            outStream.close()
-            socket.close()
-        } catch(e: Exception){
-            Toast.makeText(applicationContext, "$e", Toast.LENGTH_LONG).show()
-        }
+        Thread(ClientThread()).start()
     }
 
     override fun onResume() {
