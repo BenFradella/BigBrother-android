@@ -52,6 +52,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var socket: Socket? = null
     private val SERVERPORT = 6969
     private val SERVER_IP = "206.189.199.185"
+    var clientMessage = ""
+    var serverMessage = ""
 
     private var arrZone: MutableList<Circle> = ArrayList()
     private var arrBigBrother: MutableList<BigBrother> = ArrayList()
@@ -63,9 +65,29 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     inner class ClientThread : Runnable {
         override fun run() {
             try {
-//                val serverAddr: InetAddress = InetAddress.getByName(SERVER_IP)
-
                 socket = Socket(SERVER_IP, SERVERPORT)
+
+                val inStream = DataInputStream(socket!!.getInputStream())
+                val outStream = DataOutputStream(socket!!.getOutputStream())
+                val br = BufferedReader(InputStreamReader(System.`in`))
+
+                // greet the server and communicate that this connection is from a phone, not a tracker
+                outStream.writeUTF("Hello from an observer")
+
+                while ( clientMessage != "disconnect" ) {
+                    clientMessage = br.readLine()
+                    if ( clientMessage != "" ) {
+                        outStream.writeUTF(clientMessage)
+                        outStream.flush()
+                        clientMessage = ""
+                    }
+                    serverMessage = inStream.readUTF()
+                    // Todo: handle data/response from server
+                }
+
+                outStream.close()
+                outStream.close()
+                socket!!.close()
 
             } catch (e1: UnknownHostException) {
                 e1.printStackTrace()
@@ -106,6 +128,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onPause() {
         super.onPause()
         mNfcAdapter.disableForegroundDispatch(this)
+    }
+
+    override fun onDestroy() {
+        clientMessage = "disconnect"
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent){
