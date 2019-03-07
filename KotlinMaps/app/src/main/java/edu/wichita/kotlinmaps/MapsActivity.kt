@@ -71,7 +71,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 val outStream = DataOutputStream(socket!!.getOutputStream())
                 val br = BufferedReader(InputStreamReader(System.`in`))
 
-                // greet the server and communicate that this connection is from a phone, not a tracker
+                // thread will sit here until it's able to send the message, insuring we have a stable connection
                 outStream.writeUTF("Hello from an observer")
 
                 while ( clientMessage != "disconnect" ) {
@@ -79,14 +79,16 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     if ( clientMessage != "" ) {
                         outStream.writeUTF(clientMessage)
                         outStream.flush()
-                        clientMessage = ""
                     }
-                    serverMessage = inStream.readUTF()
-                    // Todo: handle data/response from server
-                    outStream.writeUTF("Goodbye")
+                    if ( "get" in clientMessage ) {
+                        serverMessage = inStream.readUTF() // the thread will just sit here forever if it doesn't get a response
+                        // Todo: handle data/response from server
+                    }
+                    clientMessage = ""
                 }
 
-                outStream.close()
+                outStream.writeUTF("Goodbye")
+                inStream.close()
                 outStream.close()
                 socket!!.close()
 
