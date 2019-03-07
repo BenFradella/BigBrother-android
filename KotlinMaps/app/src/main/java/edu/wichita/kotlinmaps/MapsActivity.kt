@@ -75,7 +75,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 outStream.writeUTF("Hello from an observer")
 
                 while ( clientMessage != "disconnect" ) {
-                    clientMessage = br.readLine()
+//                    clientMessage = br.readLine()
                     if ( clientMessage != "" ) {
                         outStream.writeUTF(clientMessage)
                         outStream.flush()
@@ -83,6 +83,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     }
                     serverMessage = inStream.readUTF()
                     // Todo: handle data/response from server
+                    outStream.writeUTF("Goodbye")
                 }
 
                 outStream.close()
