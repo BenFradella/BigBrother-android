@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.location.Location
 import android.nfc.NdefMessage
 import android.nfc.NdefRecord
@@ -61,24 +62,28 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         lateinit var location: LatLng
 
         init {
-//            Toast.makeText(applicationContext, "Creating Polyline...", Toast.LENGTH_LONG).show()
-            mapPolyLines.put(
-                this.name,
+            mapPolyLines[this.name] =
                 mMap.addPolyline( PolylineOptions()
-                    .color(0x7700ff00)
-                    .endCap(RoundCap())
+                    .color(0x770000ff)
+                    .endCap(CustomCap(
+                        BitmapDescriptorFactory.fromResource(R.mipmap.ic_line_end), 40f
+                    ))
                 )
-            )
-//            Toast.makeText(applicationContext, "Done", Toast.LENGTH_LONG).show()
         }
 
         fun update( location: LatLng ) {
             this.location = location
-            mapPolyLines.getValue(this.name).points.add(location)
+
+            val points = mapPolyLines[this.name]!!.points
+            points.add(location)
+            mapPolyLines[this.name]!!.points = points
         }
         fun update( locationHistory: List<LatLng> ) {
             this.location = locationHistory.last()
-            mapPolyLines.getValue(this.name).points.addAll(locationHistory)
+
+            val points = mapPolyLines[this.name]!!.points
+            points.addAll(locationHistory)
+            mapPolyLines[this.name]!!.points = points
         }
     }
 
@@ -97,26 +102,30 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     // get device locations and update map
                     for ( bbDevice in arrBigBrother ) {
                         outStream.writeUTF("getLocation ${bbDevice.name}")
-                        showToast("Receiving data...")
-                        var sLocationHistory = ""
-                        val nLength = inStream.readInt()                    // read length of incoming message
-                        if ( nLength > 0 ) {
-                            val message = ByteArray(nLength)
-                            inStream.readFully(message, 0, message.size) // read the message
-                            sLocationHistory = message.toString()
-                        }
-                        showToast("Parsing data...")
+                        val sLocationHistory = inStream.readUTF()
                         val arrLocationHistory: MutableList<LatLng> = ArrayList()
 
                         // usually there's only one or two new locations in the history, so the loop is pretty fast
                         for ( sLocation in sLocationHistory.split("\n") ) {
-                            val dLat = sLocation.split(',')[0].dropLast(1).toDouble()
-                            val dLon = sLocation.split(',')[1].dropLast(1).toDouble()
-                            val llLocation = LatLng(dLat, dLon)
-                            arrLocationHistory.add(llLocation)
-                            showToast("Received: $llLocation")
+                            if ( sLocation != "" ) {
+                                val arrLatLng = sLocation.split(',')
+                                var dLat = 0.0
+                                var dLon = 0.0
+                                when ( arrLatLng[0].last() ) {
+                                    'N' -> { dLat = arrLatLng[0].dropLast(1).toDouble() }
+                                    'S' -> { dLat = -arrLatLng[0].dropLast(1).toDouble() }
+                                }
+                                when ( arrLatLng[1].last() ) {
+                                    'E' -> { dLon = arrLatLng[1].dropLast(1).toDouble() }
+                                    'W' -> { dLon = -arrLatLng[1].dropLast(1).toDouble() }
+                                }
+                                val llLocation = LatLng(dLat, dLon)
+                                arrLocationHistory.add(llLocation)
+                            }
                         }
-                        bbDevice.update(arrLocationHistory)
+                        runOnUiThread {
+                            bbDevice.update(arrLocationHistory)
+                        }
                     }
                 }
 
@@ -178,7 +187,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         if ( tag != null ) {
             Toast.makeText(applicationContext, "Scanned tag: $tag", Toast.LENGTH_LONG).show()
             // handle a new BigBrother device with name == tag
-            arrBigBrother.add(BigBrother(tag))
+            try {
+                arrBigBrother.add(BigBrother(tag))
+            } catch (e: Exception) {
+                showToast("$e")
+            }
             // todo - tell the server where the device is allowed to be
         }
     }
