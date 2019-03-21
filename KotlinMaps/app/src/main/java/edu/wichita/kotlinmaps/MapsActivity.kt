@@ -11,6 +11,7 @@ import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.*
 import android.os.Bundle
+import android.os.ConditionVariable
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
 import android.support.v7.app.AppCompatActivity
@@ -23,9 +24,7 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
-import com.google.android.gms.maps.model.Circle
-import com.google.android.gms.maps.model.CircleOptions
-import com.google.android.gms.maps.model.LatLng
+import com.google.android.gms.maps.model.*
 import java.net.InetAddress
 import java.net.ServerSocket
 import kotlin.jvm.javaClass
@@ -52,14 +51,35 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var socket: Socket? = null
     private val SERVERPORT = 6969
     private val SERVER_IP = "206.189.199.185"
-    var clientMessage = ""
-    var serverMessage = ""
+    private var bDisconnect = false
 
     private var arrZone: MutableList<Circle> = ArrayList()
     private var arrBigBrother: MutableList<BigBrother> = ArrayList()
+    private var mapPolyLines: MutableMap<String, Polyline> = HashMap()
 
-    private data class BigBrother(val name: String) {
+    private inner class BigBrother(val name: String) {
         lateinit var location: LatLng
+
+        init {
+//            Toast.makeText(applicationContext, "Creating Polyline...", Toast.LENGTH_LONG).show()
+            mapPolyLines.put(
+                this.name,
+                mMap.addPolyline( PolylineOptions()
+                    .color(0x7700ff00)
+                    .endCap(RoundCap())
+                )
+            )
+//            Toast.makeText(applicationContext, "Done", Toast.LENGTH_LONG).show()
+        }
+
+        fun update( location: LatLng ) {
+            this.location = location
+            mapPolyLines.getValue(this.name).points.add(location)
+        }
+        fun update( locationHistory: List<LatLng> ) {
+            this.location = locationHistory.last()
+            mapPolyLines.getValue(this.name).points.addAll(locationHistory)
+        }
     }
 
     inner class ClientThread : Runnable {
@@ -69,22 +89,35 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
                 val inStream = DataInputStream(socket!!.getInputStream())
                 val outStream = DataOutputStream(socket!!.getOutputStream())
-                val br = BufferedReader(InputStreamReader(System.`in`))
 
                 // thread will sit here until it's able to send the message, insuring we have a stable connection
                 outStream.writeUTF("Hello from an observer")
 
-                while ( clientMessage != "disconnect" ) {
-//                    clientMessage = br.readLine()
-                    if ( clientMessage != "" ) {
-                        outStream.writeUTF(clientMessage)
-                        outStream.flush()
+                while ( !bDisconnect ) {
+                    // get device locations and update map
+                    for ( bbDevice in arrBigBrother ) {
+                        outStream.writeUTF("getLocation ${bbDevice.name}")
+                        showToast("Receiving data...")
+                        var sLocationHistory = ""
+                        val nLength = inStream.readInt()                    // read length of incoming message
+                        if ( nLength > 0 ) {
+                            val message = ByteArray(nLength)
+                            inStream.readFully(message, 0, message.size) // read the message
+                            sLocationHistory = message.toString()
+                        }
+                        showToast("Parsing data...")
+                        val arrLocationHistory: MutableList<LatLng> = ArrayList()
+
+                        // usually there's only one or two new locations in the history, so the loop is pretty fast
+                        for ( sLocation in sLocationHistory.split("\n") ) {
+                            val dLat = sLocation.split(',')[0].dropLast(1).toDouble()
+                            val dLon = sLocation.split(',')[1].dropLast(1).toDouble()
+                            val llLocation = LatLng(dLat, dLon)
+                            arrLocationHistory.add(llLocation)
+                            showToast("Received: $llLocation")
+                        }
+                        bbDevice.update(arrLocationHistory)
                     }
-                    if ( "get" in clientMessage ) {
-                        serverMessage = inStream.readUTF() // the thread will just sit here forever if it doesn't get a response
-                        // Todo: handle data/response from server
-                    }
-                    clientMessage = ""
                 }
 
                 outStream.writeUTF("Goodbye")
@@ -92,12 +125,14 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 outStream.close()
                 socket!!.close()
 
-            } catch (e1: UnknownHostException) {
-                e1.printStackTrace()
-            } catch (e1: IOException) {
-                e1.printStackTrace()
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
+    }
+
+    fun showToast(toast: String) {
+        runOnUiThread { Toast.makeText(this@MapsActivity, toast, Toast.LENGTH_SHORT).show() }
     }
 
 
@@ -134,7 +169,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     override fun onDestroy() {
-        clientMessage = "disconnect"
+        bDisconnect = true
         super.onDestroy()
     }
 
@@ -144,8 +179,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             Toast.makeText(applicationContext, "Scanned tag: $tag", Toast.LENGTH_LONG).show()
             // handle a new BigBrother device with name == tag
             arrBigBrother.add(BigBrother(tag))
-                // todo - get the last known location of the device from the server
-                // todo - and tell the server where the device is allowed to be
+            // todo - tell the server where the device is allowed to be
         }
     }
     private fun getTagInfo(intent: Intent): String? {
@@ -242,7 +276,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             mMap.addCircle(
                 CircleOptions()
                     .center(mMap.cameraPosition.target)
-                    .radius(calculateVisibleWidth()/3.14)
+                    .radius(calculateVisibleWidth()/3.14)   // visible width by itself would make the radius too big
                     .strokeColor(0x77ff0000)
                     .fillColor(0x7700ff00)
                     .clickable(true)
