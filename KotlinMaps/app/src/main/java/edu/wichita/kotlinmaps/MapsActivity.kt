@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.location.Location
 import android.nfc.NdefMessage
 import android.nfc.NdefRecord
@@ -12,7 +11,6 @@ import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.*
 import android.os.Bundle
-import android.os.ConditionVariable
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
 import android.support.v7.app.AppCompatActivity
@@ -26,12 +24,10 @@ import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.*
-import java.net.InetAddress
-import java.net.ServerSocket
 import kotlin.jvm.javaClass
 import java.io.*
+import java.lang.Thread.sleep
 import java.net.Socket
-import java.net.UnknownHostException
 
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
@@ -39,15 +35,15 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var mMap: GoogleMap
     private lateinit var mFusedLocationProviderClient: FusedLocationProviderClient
 
-    private lateinit var mNfcAdapter: NfcAdapter
-    private lateinit var mPendingIntent: PendingIntent
+    private lateinit var aNfcAdapter: NfcAdapter
+    private lateinit var iPendingIntent: PendingIntent
 
-    private var mFinePermission = Manifest.permission.ACCESS_FINE_LOCATION
-    private var mCoarsePermission = Manifest.permission.ACCESS_COARSE_LOCATION
-    private var mLocationPermissionsGranted = false
-    private val mLocationPermissionRequestCode = 1234
+    private var pFinePermission = Manifest.permission.ACCESS_FINE_LOCATION
+    private var pCoarsePermission = Manifest.permission.ACCESS_COARSE_LOCATION
+    private var bLocationPermissionsGranted = false
+    private val nLocationPermissionRequestCode = 1234
 
-    private lateinit var mZone: ImageButton
+    private lateinit var ibZone: ImageButton
 
     private var socket: Socket? = null
     private val SERVERPORT = 6969
@@ -64,7 +60,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         init {
             mapPolyLines[this.name] =
                 mMap.addPolyline( PolylineOptions()
-                    .color(0x770000ff)
+                    .color(0x770000ff) // half-transparent blue
                     .endCap(CustomCap(
                         BitmapDescriptorFactory.fromResource(R.mipmap.ic_line_end), 40f
                     ))
@@ -88,36 +84,39 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     inner class ClientThread : Runnable {
-        override fun run() {
-            try {
-                socket = Socket(SERVER_IP, SERVERPORT)
+        override fun run() = try {
+            socket = Socket(SERVER_IP, SERVERPORT)
 
-                val inStream = DataInputStream(socket!!.getInputStream())
-                val outStream = DataOutputStream(socket!!.getOutputStream())
+            val inStream = DataInputStream(socket!!.getInputStream())
+            val outStream = DataOutputStream(socket!!.getOutputStream())
 
-                // thread will sit here until it's able to send the message, insuring we have a stable connection
-                outStream.writeUTF("Hello from an observer")
+            // thread will sit here until it's able to send the message, insuring we have a stable connection
+            outStream.writeUTF("Hello from an observer")
 
-                while ( !bDisconnect ) {
-                    // get device locations and update map
+            var loops = 0
+            while ( !bDisconnect ) {
+                try {
                     for ( bbDevice in arrBigBrother ) {
+                        /**
+                         * get device locations and update map
+                         */
+                        showToast("loop number ${++loops}")
                         outStream.writeUTF("getLocation ${bbDevice.name}")
                         val sLocationHistory = inStream.readUTF()
                         val arrLocationHistory: MutableList<LatLng> = ArrayList()
 
-                        // usually there's only one or two new locations in the history, so the loop is pretty fast
                         for ( sLocation in sLocationHistory.split("\n") ) {
                             if ( sLocation != "" ) {
                                 val arrLatLng = sLocation.split(',')
                                 var dLat = 0.0
                                 var dLon = 0.0
                                 when ( arrLatLng[0].last() ) {
-                                    'N' -> { dLat = arrLatLng[0].dropLast(1).toDouble() }
-                                    'S' -> { dLat = -arrLatLng[0].dropLast(1).toDouble() }
+                                    'N' -> dLat = arrLatLng[0].dropLast(1).toDouble()
+                                    'S' -> dLat = -arrLatLng[0].dropLast(1).toDouble()
                                 }
                                 when ( arrLatLng[1].last() ) {
-                                    'E' -> { dLon = arrLatLng[1].dropLast(1).toDouble() }
-                                    'W' -> { dLon = -arrLatLng[1].dropLast(1).toDouble() }
+                                    'E' -> dLon = arrLatLng[1].dropLast(1).toDouble()
+                                    'W' -> dLon = -arrLatLng[1].dropLast(1).toDouble()
                                 }
                                 val llLocation = LatLng(dLat, dLon)
                                 arrLocationHistory.add(llLocation)
@@ -126,21 +125,46 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         runOnUiThread {
                             bbDevice.update(arrLocationHistory)
                         }
+
+
+                        var bDeviceInsideZone = false
+                        try {
+                            runOnUiThread {
+                                for ( circle in arrZone ) {
+                                    // check if device is in any zones
+                                    if ( circleContains(circle, bbDevice) ) {
+                                        bDeviceInsideZone = true
+                                        break
+                                    }
+                                }
+                            }
+                        } catch ( e: Exception ) {
+                            showToast("$e")
+                        }
+                        if ( ! bDeviceInsideZone ) {
+                            mapPolyLines[bbDevice.name]!!.setColor(0x77ff0000) // half-transparent red
+                            // todo - send push notification
+                        }
                     }
+                } catch ( e: Exception ) {
+                    showToast("$e")
                 }
 
-                outStream.writeUTF("Goodbye")
-                inStream.close()
-                outStream.close()
-                socket!!.close()
-
-            } catch (e: Exception) {
-                e.printStackTrace()
+                sleep(1000) // only ping server once per second
+                // todo - update server with zone data
             }
+
+            outStream.writeUTF("Goodbye")
+            inStream.close()
+            outStream.close()
+            socket!!.close()
+
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
-    fun showToast(toast: String) {
+    private fun showToast(toast: String) {
         runOnUiThread { Toast.makeText(this@MapsActivity, toast, Toast.LENGTH_SHORT).show() }
     }
 
@@ -149,12 +173,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_maps)
 
-        mZone = findViewById(R.id.circle_button)
+        ibZone = findViewById(R.id.circle_button)
 
         getLocationPermissions()
 
-        mNfcAdapter = NfcAdapter.getDefaultAdapter(this)
-        mPendingIntent = PendingIntent.getActivity(
+        aNfcAdapter = NfcAdapter.getDefaultAdapter(this)
+        iPendingIntent = PendingIntent.getActivity(
             this,
             0,
             Intent(
@@ -169,12 +193,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     override fun onResume() {
         super.onResume()
-        mNfcAdapter.enableForegroundDispatch(this, mPendingIntent, null, null)
+        aNfcAdapter.enableForegroundDispatch(this, iPendingIntent, null, null)
     }
 
     override fun onPause() {
         super.onPause()
-        mNfcAdapter.disableForegroundDispatch(this)
+        aNfcAdapter.disableForegroundDispatch(this)
     }
 
     override fun onDestroy() {
@@ -183,16 +207,17 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     override fun onNewIntent(intent: Intent){
+        /**
+         * get the names of BigBrother devices from NFC tags and create corresponding objects
+         */
         val tag = getTagInfo(intent)
         if ( tag != null ) {
             Toast.makeText(applicationContext, "Scanned tag: $tag", Toast.LENGTH_LONG).show()
-            // handle a new BigBrother device with name == tag
             try {
                 arrBigBrother.add(BigBrother(tag))
             } catch (e: Exception) {
                 showToast("$e")
             }
-            // todo - tell the server where the device is allowed to be
         }
     }
     private fun getTagInfo(intent: Intent): String? {
@@ -234,29 +259,29 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     }
 
     private fun getLocationPermissions() {
-        val permissions = arrayOf(mFinePermission, mCoarsePermission)
+        val permissions = arrayOf(pFinePermission, pCoarsePermission)
 
-        if (ContextCompat.checkSelfPermission(this.applicationContext, mFinePermission) == PackageManager.PERMISSION_GRANTED &&
-            ContextCompat.checkSelfPermission(this.applicationContext, mCoarsePermission) == PackageManager.PERMISSION_GRANTED) {
-            mLocationPermissionsGranted = true
+        if (ContextCompat.checkSelfPermission(this.applicationContext, pFinePermission) == PackageManager.PERMISSION_GRANTED &&
+            ContextCompat.checkSelfPermission(this.applicationContext, pCoarsePermission) == PackageManager.PERMISSION_GRANTED) {
+            bLocationPermissionsGranted = true
             initMap()
         } else {
-            ActivityCompat.requestPermissions(this, permissions, mLocationPermissionRequestCode)
+            ActivityCompat.requestPermissions(this, permissions, nLocationPermissionRequestCode)
         }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        mLocationPermissionsGranted = false
+        bLocationPermissionsGranted = false
 
-        if (requestCode == mLocationPermissionRequestCode) {
+        if (requestCode == nLocationPermissionRequestCode) {
             if (grantResults.isNotEmpty()) {
                 for (permission in grantResults) {
                     if (permission != PackageManager.PERMISSION_GRANTED) {
-                        mLocationPermissionsGranted = false
+                        bLocationPermissionsGranted = false
                         return
                     }
                 }
-                mLocationPermissionsGranted = true
+                bLocationPermissionsGranted = true
                 initMap()
             }
         }
@@ -270,7 +295,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     override fun onMapReady(googleMap: GoogleMap) {
         mMap = googleMap
 
-        if (mLocationPermissionsGranted) {
+        if (bLocationPermissionsGranted) {
             getDeviceLatLng()
 
             if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
@@ -281,7 +306,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             mMap.uiSettings.isMyLocationButtonEnabled = false
         }
 
-        mZone.setOnClickListener { drawCircle() }
+        ibZone.setOnClickListener { drawCircle() }
     }
 
     private fun drawCircle() {
@@ -296,7 +321,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             )
         )
         mMap.setOnCircleClickListener { circle ->
-            mZone.setImageResource(R.drawable.ic_delete)
+            ibZone.setImageResource(R.drawable.ic_delete)
 
             for ( zone in arrZone ) {
                 zone.isClickable = false
@@ -311,11 +336,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
                 mMap.setOnMapClickListener(null)
                 mMap.setOnMapLongClickListener(null)
-                mZone.setOnClickListener { drawCircle() }
-                mZone.setImageResource(R.drawable.ic_circle_green)
+                ibZone.setOnClickListener { drawCircle() }
+                ibZone.setImageResource(R.drawable.ic_circle_green)
             }
 
-            mZone.setOnClickListener {
+            ibZone.setOnClickListener {
                 arrZone.remove(circle)
                 circle.remove()
 
@@ -412,11 +437,26 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
+    private fun circleContains(circle: Circle, bbDevice: BigBrother): Boolean {
+        val arrDistance = FloatArray(1)
+
+        Location.distanceBetween(
+            circle.center.latitude,
+            circle.center.longitude,
+            bbDevice.location.latitude,
+            bbDevice.location.longitude,
+            arrDistance
+        )
+        val distance = arrDistance[0]
+
+        return distance <= circle.radius
+    }
+
     private fun getDeviceLatLng() {
         mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this)
 
         try {
-            if (mLocationPermissionsGranted) {
+            if (bLocationPermissionsGranted) {
 
                 val location = mFusedLocationProviderClient.lastLocation
                 location.addOnCompleteListener { task ->
