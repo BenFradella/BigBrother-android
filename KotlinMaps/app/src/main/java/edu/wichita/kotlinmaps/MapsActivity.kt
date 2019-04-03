@@ -94,64 +94,53 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             outStream.writeUTF("Hello from an observer")
 
             var loops = 0
-            while ( !bDisconnect ) {
-                try {
-                    for ( bbDevice in arrBigBrother ) {
-                        /**
-                         * get device locations and update map
-                         */
-                        showToast("loop number ${++loops}")
-                        outStream.writeUTF("getLocation ${bbDevice.name}")
-                        val sLocationHistory = inStream.readUTF()
-                        val arrLocationHistory: MutableList<LatLng> = ArrayList()
+            while ( ! bDisconnect ) {
+                for ( bbDevice in arrBigBrother ) {
+                    /**
+                     * get device locations and update map
+                     */
+                    outStream.writeUTF("getLocation ${bbDevice.name}")
+                    val sLocationHistory = inStream.readUTF()
+                    val arrLocationHistory: MutableList<LatLng> = ArrayList()
 
-                        for ( sLocation in sLocationHistory.split("\n") ) {
-                            if ( sLocation != "" ) {
-                                val arrLatLng = sLocation.split(',')
-                                var dLat = 0.0
-                                var dLon = 0.0
-                                when ( arrLatLng[0].last() ) {
-                                    'N' -> dLat = arrLatLng[0].dropLast(1).toDouble()
-                                    'S' -> dLat = -arrLatLng[0].dropLast(1).toDouble()
-                                }
-                                when ( arrLatLng[1].last() ) {
-                                    'E' -> dLon = arrLatLng[1].dropLast(1).toDouble()
-                                    'W' -> dLon = -arrLatLng[1].dropLast(1).toDouble()
-                                }
-                                val llLocation = LatLng(dLat, dLon)
-                                arrLocationHistory.add(llLocation)
+                    for ( sLocation in sLocationHistory.split("\n") ) {
+                        if ( sLocation != "" ) {
+                            val arrLatLng = sLocation.split(',')
+                            var dLat = 0.0
+                            var dLon = 0.0
+                            when ( arrLatLng[0].last() ) {
+                                'N' -> dLat = arrLatLng[0].dropLast(1).toDouble()
+                                'S' -> dLat = -arrLatLng[0].dropLast(1).toDouble()
                             }
+                            when ( arrLatLng[1].last() ) {
+                                'E' -> dLon = arrLatLng[1].dropLast(1).toDouble()
+                                'W' -> dLon = -arrLatLng[1].dropLast(1).toDouble()
+                            }
+                            val llLocation = LatLng(dLat, dLon)
+                            arrLocationHistory.add(llLocation)
                         }
+                    }
+                    runOnUiThread {
+                        bbDevice.update(arrLocationHistory)
+                    }
+
+                    var bDeviceInsideZone = false
+                    for ( circle in arrZone ) {
+                        // check if device is in any zones
+                        if ( circleContains(circle, bbDevice) ) {
+                            bDeviceInsideZone = true
+                            break
+                        }
+                    }
+                    if ( ! bDeviceInsideZone ) {
                         runOnUiThread {
-                            bbDevice.update(arrLocationHistory)
-                        }
-
-
-                        var bDeviceInsideZone = false
-                        try {
-                            runOnUiThread {
-                                for ( circle in arrZone ) {
-                                    // check if device is in any zones
-                                    if ( circleContains(circle, bbDevice) ) {
-                                        bDeviceInsideZone = true
-                                        break
-                                    }
-                                }
-                            }
-                        } catch ( e: Exception ) {
-                            showToast("$e")
-                        }
-                        if ( ! bDeviceInsideZone ) {
                             mapPolyLines[bbDevice.name]!!.setColor(0x77ff0000) // half-transparent red
                             // todo - send push notification
                         }
                     }
-                } catch ( e: Exception ) {
-                    showToast("$e")
                 }
-
-                sleep(1000) // only ping server once per second
                 // todo - update server with zone data
+                sleep(1000) // only ping server once per second
             }
 
             outStream.writeUTF("Goodbye")
