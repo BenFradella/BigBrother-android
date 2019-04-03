@@ -46,6 +46,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private lateinit var ibZone: ImageButton
 
     private var socket: Socket? = null
+    private val thread = Thread(ClientThread())
     private val SERVERPORT = 6969
     private val SERVER_IP = "206.189.199.185"
     private var bDisconnect = false
@@ -67,19 +68,52 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 )
         }
 
-        fun update( location: LatLng ) {
+        fun updateLocation( location: LatLng ) {
             this.location = location
 
             val points = mapPolyLines[this.name]!!.points
             points.add(location)
             mapPolyLines[this.name]!!.points = points
         }
-        fun update( locationHistory: List<LatLng> ) {
+        fun updateLocation( locationHistory: List<LatLng> ) {
             this.location = locationHistory.last()
 
             val points = mapPolyLines[this.name]!!.points
             points.addAll(locationHistory)
             mapPolyLines[this.name]!!.points = points
+        }
+
+        fun updateStatus() {
+            var fLeastDelta = 1.0
+            var fCurrentDelta: Double
+            for ( circle in arrZone ) {
+                // find the least delta between the device and a zone edge
+                fCurrentDelta = circleEdgeDelta(circle, this.location)
+                if ( fCurrentDelta < fLeastDelta ) {
+                    fLeastDelta = fCurrentDelta
+                }
+                if ( fLeastDelta < -5 ) {
+                    // we don't need to find the least. Just need to know it isn't outside/nearly outside the circle
+                    break
+                }
+            }
+
+            when {
+                ( fLeastDelta < -5 ) -> {
+                    //green
+                    showToast(fLeastDelta.toString())
+                    mapPolyLines[this.name]!!.setColor(0x7700ff00) // half-transparent green
+                }
+                ( fLeastDelta in -5.0..0.0 ) -> {
+                    //yellow
+                    mapPolyLines[this.name]!!.setColor(0x77ffff00) // half-transparent yellow
+                }
+                else -> {
+                    //red
+                    mapPolyLines[this.name]!!.setColor(0x77ff0000) // half-transparent red
+                    // todo - send push notification
+                }
+            }
         }
     }
 
@@ -93,9 +127,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             // thread will sit here until it's able to send the message, insuring we have a stable connection
             outStream.writeUTF("Hello from an observer")
 
-            var loops = 0
-            while ( ! bDisconnect ) {
-                for ( bbDevice in arrBigBrother ) {
+            while (!bDisconnect) {
+                for (bbDevice in arrBigBrother) {
                     /**
                      * get device locations and update map
                      */
@@ -103,16 +136,16 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     val sLocationHistory = inStream.readUTF()
                     val arrLocationHistory: MutableList<LatLng> = ArrayList()
 
-                    for ( sLocation in sLocationHistory.split("\n") ) {
-                        if ( sLocation != "" ) {
+                    for (sLocation in sLocationHistory.split("\n")) {
+                        if (sLocation != "") {
                             val arrLatLng = sLocation.split(',')
                             var dLat = 0.0
                             var dLon = 0.0
-                            when ( arrLatLng[0].last() ) {
+                            when (arrLatLng[0].last()) {
                                 'N' -> dLat = arrLatLng[0].dropLast(1).toDouble()
                                 'S' -> dLat = -arrLatLng[0].dropLast(1).toDouble()
                             }
-                            when ( arrLatLng[1].last() ) {
+                            when (arrLatLng[1].last()) {
                                 'E' -> dLon = arrLatLng[1].dropLast(1).toDouble()
                                 'W' -> dLon = -arrLatLng[1].dropLast(1).toDouble()
                             }
@@ -121,22 +154,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         }
                     }
                     runOnUiThread {
-                        bbDevice.update(arrLocationHistory)
-                    }
-
-                    var bDeviceInsideZone = false
-                    for ( circle in arrZone ) {
-                        // check if device is in any zones
-                        if ( circleContains(circle, bbDevice) ) {
-                            bDeviceInsideZone = true
-                            break
-                        }
-                    }
-                    if ( ! bDeviceInsideZone ) {
-                        runOnUiThread {
-                            mapPolyLines[bbDevice.name]!!.setColor(0x77ff0000) // half-transparent red
-                            // todo - send push notification
-                        }
+                        bbDevice.updateLocation(arrLocationHistory)
+                        bbDevice.updateStatus()
                     }
                 }
                 // todo - update server with zone data
@@ -147,7 +166,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             inStream.close()
             outStream.close()
             socket!!.close()
-
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -177,7 +195,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             0
         )
 
-        Thread(ClientThread()).start()
+        thread.start()
     }
 
     override fun onResume() {
@@ -192,6 +210,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     override fun onDestroy() {
         bDisconnect = true
+        thread.join(5000)
         super.onDestroy()
     }
 
@@ -330,10 +349,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             }
 
             ibZone.setOnClickListener {
+                backToNormal()
+
                 arrZone.remove(circle)
                 circle.remove()
-
-                backToNormal()
             }
 
             mMap.setOnMapClickListener { position ->
@@ -426,19 +445,23 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
     }
 
-    private fun circleContains(circle: Circle, bbDevice: BigBrother): Boolean {
+    private fun circleEdgeDelta(circle: Circle, location: LatLng): Double {
+        /**
+         * returns the delta (in meters) between a location and the edge of a circle
+         * negative values are inside the circle, 0 is at the edge, and positive is outside the circle
+         */
         val arrDistance = FloatArray(1)
 
         Location.distanceBetween(
             circle.center.latitude,
             circle.center.longitude,
-            bbDevice.location.latitude,
-            bbDevice.location.longitude,
+            location.latitude,
+            location.longitude,
             arrDistance
         )
         val distance = arrDistance[0]
 
-        return distance <= circle.radius
+        return (distance - circle.radius)
     }
 
     private fun getDeviceLatLng() {
