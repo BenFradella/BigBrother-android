@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.graphics.Color.*
 import android.location.Location
 import android.nfc.NdefMessage
@@ -28,6 +29,7 @@ import com.google.android.gms.maps.model.*
 import kotlin.jvm.javaClass
 import java.io.*
 import java.lang.Thread.sleep
+import java.net.InetAddress
 import java.net.Socket
 
 
@@ -48,7 +50,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private var socket: Socket? = null
     private val thread = Thread(ClientThread())
-    private val serverPort = "6969"
+    private val serverPort = 6969
     private val serverIp = "206.189.199.185"
     private var bDisconnect = false
 
@@ -56,12 +58,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
     private var arrBigBrother: MutableList<BigBrother> = ArrayList()
     private var mapPolyLines: MutableMap<String, Polyline> = HashMap()
 
-    private enum class Status {
-        BLUE, GREEN, YELLOW, RED
-    }
+
     private inner class BigBrother(val name: String) {
         lateinit var location: LatLng
-        lateinit var status: Status
+        var status: Int = BLUE
 
         //distance (in meters) to warn that a device is about to leave the zone
         private val warnDistance = -5.0
@@ -108,23 +108,20 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
             when {
                 ( fLeastDelta == null ) -> {
-                    this.status = Status.BLUE
-                    mapPolyLines[this.name]!!.color = BLUE
+                    this.status = BLUE
                 }
                 ( fLeastDelta < warnDistance ) -> {
-                    this.status = Status.GREEN
-                    mapPolyLines[this.name]!!.color = GREEN
+                    this.status = GREEN
                 }
                 ( fLeastDelta in warnDistance..0.0 ) -> {
-                    this.status = Status.YELLOW
-                    mapPolyLines[this.name]!!.color = YELLOW
+                    this.status = YELLOW
                 }
                 else -> {
-                    this.status = Status.RED
-                    mapPolyLines[this.name]!!.color = RED
+                    this.status = RED
                     // todo - send push notification
                 }
             }
+            mapPolyLines[this.name]!!.color = this.status
         }
     }
 
