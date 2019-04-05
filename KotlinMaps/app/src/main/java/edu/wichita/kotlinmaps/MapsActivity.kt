@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color.*
 import android.location.Location
 import android.nfc.NdefMessage
 import android.nfc.NdefRecord
@@ -47,21 +48,28 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private var socket: Socket? = null
     private val thread = Thread(ClientThread())
-    private val SERVERPORT = 6969
-    private val SERVER_IP = "206.189.199.185"
+    private val serverPort = "6969"
+    private val serverIp = "206.189.199.185"
     private var bDisconnect = false
 
     private var arrZone: MutableList<Circle> = ArrayList()
     private var arrBigBrother: MutableList<BigBrother> = ArrayList()
     private var mapPolyLines: MutableMap<String, Polyline> = HashMap()
 
+    private enum class Status {
+        BLUE, GREEN, YELLOW, RED
+    }
     private inner class BigBrother(val name: String) {
         lateinit var location: LatLng
+        lateinit var status: Status
+
+        //distance (in meters) to warn that a device is about to leave the zone
+        private val warnDistance = -5.0
 
         init {
             mapPolyLines[this.name] =
                 mMap.addPolyline( PolylineOptions()
-                    .color(0x770000ff) // half-transparent blue
+                    .color(BLUE)
                     .endCap(CustomCap(
                         BitmapDescriptorFactory.fromResource(R.mipmap.ic_line_end), 40f
                     ))
@@ -84,33 +92,36 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         }
 
         fun updateStatus() {
-            var fLeastDelta = 1.0
+            var fLeastDelta: Double? = null
             var fCurrentDelta: Double
             for ( circle in arrZone ) {
                 // find the least delta between the device and a zone edge
                 fCurrentDelta = circleEdgeDelta(circle, this.location)
-                if ( fCurrentDelta < fLeastDelta ) {
+                if ( fLeastDelta == null || fCurrentDelta < fLeastDelta ) {
                     fLeastDelta = fCurrentDelta
                 }
-                if ( fLeastDelta < -5 ) {
+                if ( fLeastDelta < warnDistance ) {
                     // we don't need to find the least. Just need to know it isn't outside/nearly outside the circle
                     break
                 }
             }
 
             when {
-                ( fLeastDelta < -5 ) -> {
-                    //green
-                    showToast(fLeastDelta.toString())
-                    mapPolyLines[this.name]!!.setColor(0x7700ff00) // half-transparent green
+                ( fLeastDelta == null ) -> {
+                    this.status = Status.BLUE
+                    mapPolyLines[this.name]!!.color = BLUE
                 }
-                ( fLeastDelta in -5.0..0.0 ) -> {
-                    //yellow
-                    mapPolyLines[this.name]!!.setColor(0x77ffff00) // half-transparent yellow
+                ( fLeastDelta < warnDistance ) -> {
+                    this.status = Status.GREEN
+                    mapPolyLines[this.name]!!.color = GREEN
+                }
+                ( fLeastDelta in warnDistance..0.0 ) -> {
+                    this.status = Status.YELLOW
+                    mapPolyLines[this.name]!!.color = YELLOW
                 }
                 else -> {
-                    //red
-                    mapPolyLines[this.name]!!.setColor(0x77ff0000) // half-transparent red
+                    this.status = Status.RED
+                    mapPolyLines[this.name]!!.color = RED
                     // todo - send push notification
                 }
             }
@@ -119,7 +130,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     inner class ClientThread : Runnable {
         override fun run() = try {
-            socket = Socket(SERVER_IP, SERVERPORT)
+            socket = Socket(serverIp, serverPort)
 
             val inStream = DataInputStream(socket!!.getInputStream())
             val outStream = DataOutputStream(socket!!.getOutputStream())
@@ -323,8 +334,8 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 CircleOptions()
                     .center(mMap.cameraPosition.target)
                     .radius(calculateVisibleWidth()/3.14)   // visible width by itself would make the radius too big
-                    .strokeColor(0x77ff0000)
-                    .fillColor(0x7700ff00)
+                    .strokeColor(0x33ff0000)
+                    .fillColor(0x3300ff00)
                     .clickable(true)
             )
         )
@@ -334,10 +345,10 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             for ( zone in arrZone ) {
                 zone.isClickable = false
             }
-            circle.fillColor = 0x770000ff
+            circle.fillColor = 0x330000ff
 
             fun backToNormal() {
-                circle.fillColor = 0x7700ff00
+                circle.fillColor = 0x3300ff00
                 for ( zone in arrZone ) {
                     zone.isClickable = true
                 }
