@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.graphics.Color.*
 import android.location.Location
 import android.nfc.NdefMessage
@@ -29,8 +28,8 @@ import com.google.android.gms.maps.model.*
 import kotlin.jvm.javaClass
 import java.io.*
 import java.lang.Thread.sleep
-import java.net.InetAddress
 import java.net.Socket
+import kotlin.math.absoluteValue
 
 
 class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
@@ -61,6 +60,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     private inner class BigBrother(val name: String) {
         lateinit var location: LatLng
+        val zone: MutableMap< String, Pair<LatLng, Double> > = HashMap()
         var status: Int = BLUE
 
         //distance (in meters) to warn that a device is about to leave the zone
@@ -122,6 +122,20 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             }
             mapPolyLines[this.name]!!.color = this.status
         }
+
+        fun buildZone() {
+            val circleNames = ArrayList<String>()
+
+            for ( circle in arrZone ) {
+                this.zone[circle.id] = Pair(circle.center, circle.radius)
+                circleNames.add(circle.id)
+            }
+            for ( oldCircle in this.zone.keys ) {
+                if ( oldCircle !in circleNames ) {
+                    this.zone.remove(oldCircle)
+                }
+            }
+        }
     }
 
     inner class ClientThread : Runnable {
@@ -163,31 +177,27 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                     runOnUiThread {
                         bbDevice.updateLocation(arrLocationHistory)
                         bbDevice.updateStatus()
+                        bbDevice.buildZone()
                     }
                     if ( bbDevice.status == RED ) {
                         //todo - send push notification
                     }
-                    try {
-                        for ( circle in arrZone ) {
-                            // update server with zone data
-                            val sLatitude = if ( circle.center.latitude < 0 ) {
-                                circle.center.latitude.toString() + 'S'
-                            } else {
-                                circle.center.latitude.toString() + 'N'
-                            }
-                            val sLongitude = if ( circle.center.longitude < 0 ) {
-                                circle.center.longitude.toString() + 'W'
-                            } else {
-                                circle.center.longitude.toString() + 'E'
-                            }
 
-                            val message = "setZone ${bbDevice.name} " +
-                                    "$sLatitude,$sLongitude,${circle.radius}"
-                            showToast(message)
-                            outStream.writeUTF(message)
+                    for ( circle in bbDevice.zone.values ) {
+                        // build string and update server with zone data
+                        val sLatitude = if ( circle.first.latitude < 0 ) {
+                            circle.first.latitude.absoluteValue.toString() + 'S'
+                        } else {
+                            circle.first.latitude.toString() + 'N'
                         }
-                    } catch (e: Exception) {
-                        showToast("$e")
+                        val sLongitude = if ( circle.first.longitude < 0 ) {
+                            circle.first.longitude.absoluteValue.toString() + 'W'
+                        } else {
+                            circle.first.longitude.toString() + 'E'
+                        }
+
+                        val message = "setZone ${bbDevice.name} $sLatitude,$sLongitude,${circle.second}"
+                        outStream.writeUTF(message)
                     }
                 }
                 sleep(1000) // only ping server once per second
