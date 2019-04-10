@@ -118,7 +118,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                 }
                 else -> {
                     this.status = RED
-                    // todo - send push notification
                 }
             }
             mapPolyLines[this.name]!!.color = this.status
@@ -165,8 +164,32 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         bbDevice.updateLocation(arrLocationHistory)
                         bbDevice.updateStatus()
                     }
+                    if ( bbDevice.status == RED ) {
+                        //todo - send push notification
+                    }
+                    try {
+                        for ( circle in arrZone ) {
+                            // update server with zone data
+                            val sLatitude = if ( circle.center.latitude < 0 ) {
+                                circle.center.latitude.toString() + 'S'
+                            } else {
+                                circle.center.latitude.toString() + 'N'
+                            }
+                            val sLongitude = if ( circle.center.longitude < 0 ) {
+                                circle.center.longitude.toString() + 'W'
+                            } else {
+                                circle.center.longitude.toString() + 'E'
+                            }
+
+                            val message = "setZone ${bbDevice.name} " +
+                                    "$sLatitude,$sLongitude,${circle.radius}"
+                            showToast(message)
+                            outStream.writeUTF(message)
+                        }
+                    } catch (e: Exception) {
+                        showToast("$e")
+                    }
                 }
-                // todo - update server with zone data
                 sleep(1000) // only ping server once per second
             }
 
