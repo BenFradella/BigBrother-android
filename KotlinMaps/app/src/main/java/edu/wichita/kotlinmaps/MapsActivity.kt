@@ -183,8 +183,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         //todo - send push notification
                     }
 
+                    // build string and update server with zone data
+                    val circleList = ArrayList<String>()
                     for ( circle in bbDevice.zone.values ) {
-                        // build string and update server with zone data
                         val sLatitude = if ( circle.first.latitude < 0 ) {
                             circle.first.latitude.absoluteValue.toString() + 'S'
                         } else {
@@ -196,9 +197,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                             circle.first.longitude.toString() + 'E'
                         }
 
-                        val message = "setZone ${bbDevice.name} $sLatitude,$sLongitude,${circle.second}"
-                        outStream.writeUTF(message)
+                        circleList.add("$sLatitude,$sLongitude,${circle.second}")
                     }
+                    outStream.writeUTF("setZone ${bbDevice.name} ${circleList.joinToString(separator = "\n")}")
                 }
                 sleep(1000) // only ping server once per second
             }
