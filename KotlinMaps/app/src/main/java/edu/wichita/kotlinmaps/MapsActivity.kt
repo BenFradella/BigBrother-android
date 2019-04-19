@@ -199,7 +199,9 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
                         circleList.add("$sLatitude,$sLongitude,${circle.second}")
                     }
-                    outStream.writeUTF("setZone ${bbDevice.name} ${circleList.joinToString(separator = "\n")}")
+                    if ( circleList.size > 0 ) {
+                        outStream.writeUTF("setZone ${bbDevice.name} ${circleList.joinToString(separator = "\n")}")
+                    }
                 }
                 sleep(1000) // only ping server once per second
             }
