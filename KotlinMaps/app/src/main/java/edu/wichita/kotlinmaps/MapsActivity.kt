@@ -1,7 +1,10 @@
 package edu.wichita.kotlinmaps
 
 import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color.*
@@ -11,9 +14,13 @@ import android.nfc.NdefRecord
 import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.*
+import android.os.Build
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
+import android.support.v4.app.NotificationCompat
+import android.support.v4.app.NotificationManagerCompat
 import android.support.v4.content.ContextCompat
+import android.support.v7.app.AlertDialog
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
 import android.widget.ImageButton
@@ -62,6 +69,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         lateinit var location: LatLng
         val zone: MutableMap< String, Pair<LatLng, Double> > = HashMap()
         var status: Int = BLUE
+        var distOutsideZone: Double? = 0.0
 
         //distance (in meters) to warn that a device is about to leave the zone
         private val warnDistance = -5.0
@@ -109,15 +117,19 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             when {
                 ( fLeastDelta == null ) -> {
                     this.status = BLUE
+                    this.distOutsideZone = 0.0
                 }
                 ( fLeastDelta < warnDistance ) -> {
                     this.status = GREEN
+                    this.distOutsideZone = 0.0
                 }
                 ( fLeastDelta in warnDistance..0.0 ) -> {
                     this.status = YELLOW
+                    this.distOutsideZone = 0.0
                 }
                 else -> {
                     this.status = RED
+                    this.distOutsideZone = fLeastDelta
                 }
             }
             mapPolyLines[this.name]!!.color = this.status
@@ -150,9 +162,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
             while (!bDisconnect) {
                 for (bbDevice in arrBigBrother) {
-                    /**
-                     * get device locations and update map
-                     */
+                    //get device locations and update map
                     outStream.writeUTF("getLocation ${bbDevice.name}")
                     val sLocationHistory = inStream.readUTF()
                     val arrLocationHistory: MutableList<LatLng> = ArrayList()
@@ -178,9 +188,15 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         bbDevice.updateLocation(arrLocationHistory)
                         bbDevice.updateStatus()
                         bbDevice.buildZone()
-                    }
-                    if ( bbDevice.status == RED ) {
-                        //todo - send push notification
+                        if ( bbDevice.status == RED ) {
+                            //todo - send push notification
+                            pushNotification(
+                                "Device outside zone!",
+                                "${bbDevice.name} is ${bbDevice.distOutsideZone}" +
+                                        " meters outside the area you have set",
+                                bbDevice.name
+                            )
+                        }
                     }
 
                     // build string and update server with zone data
@@ -219,11 +235,49 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
         runOnUiThread { Toast.makeText(this@MapsActivity, toast, Toast.LENGTH_SHORT).show() }
     }
 
+    private fun pushNotification(title: String, message: String, deviceID: String, CHANNEL_ID: String="Big Brother") {
+        val notificationId: Int = deviceID.hashCode()
+
+        val intent = Intent(this, AlertDialog::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent: PendingIntent = PendingIntent.getActivity(this, 0, intent, 0)
+
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification_icon_red)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+
+        with(NotificationManagerCompat.from(this)) {
+            notify(notificationId, builder.build())
+        }
+    }
+    private fun createNotificationChannel() {
+        // Create the NotificationChannel, but only on API 26+ because
+        // the NotificationChannel class is new and not in the support library
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = getString(R.string.app_name)
+            val descriptionText = getString(R.string.app_description)
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val channel = NotificationChannel("Big Brother", name, importance).apply {
+                description = descriptionText
+            }
+            // Register the channel with the system
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_maps)
 
+        createNotificationChannel()
+        setContentView(R.layout.activity_maps)
         ibZone = findViewById(R.id.circle_button)
 
         getLocationPermissions()
@@ -244,6 +298,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
     override fun onResume() {
         super.onResume()
+        createNotificationChannel()
         aNfcAdapter.enableForegroundDispatch(this, iPendingIntent, null, null)
     }
 

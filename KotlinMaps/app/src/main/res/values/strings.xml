@@ -1,4 +1,5 @@
 <resources>
-    <string name="app_name">Kotlin Maps</string>
-    <string name="title_activity_maps">Map</string>
+    <string name="app_name">Big Brother</string>
+    <string name="title_activity_maps">Big Brother</string>
+    <string name="app_description">version 1.0</string>
 </resources>
