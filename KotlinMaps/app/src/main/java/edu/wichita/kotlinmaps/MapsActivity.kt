@@ -189,7 +189,6 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         bbDevice.updateStatus()
                         bbDevice.buildZone()
                         if ( bbDevice.status == RED ) {
-                            //todo - send push notification
                             pushNotification(
                                 "Device outside zone!",
                                 "${bbDevice.name} is ${bbDevice.distOutsideZone}" +
@@ -215,9 +214,12 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
                         circleList.add("$sLatitude,$sLongitude,${circle.second}")
                     }
-                    if ( circleList.size > 0 ) {
+                    if ( circleList.isNotEmpty() ) {
                         outStream.writeUTF("setZone ${bbDevice.name} ${circleList.joinToString(separator = "\n")}")
                     }
+                }
+                if ( arrBigBrother.isEmpty() ) {
+                    outStream.writeUTF("heartbeat")
                 }
                 sleep(1000) // only ping server once per second
             }
@@ -228,6 +230,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             socket!!.close()
         } catch (e: Exception) {
             e.printStackTrace()
+            showToast("no connection to server!")
         }
     }
 
@@ -248,6 +251,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
             .setContentTitle(title)
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setOnlyAlertOnce(true)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
 
