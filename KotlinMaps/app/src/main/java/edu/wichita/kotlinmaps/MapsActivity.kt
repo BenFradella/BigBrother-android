@@ -66,7 +66,7 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
 
     private inner class BigBrother(val name: String) {
-        lateinit var location: LatLng
+        var location: LatLng? = null
         val zone: MutableMap< String, Pair<LatLng, Double> > = HashMap()
         var status: Int = BLUE
         var distOutsideZone: Double? = 0.0
@@ -101,16 +101,18 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
 
         fun updateStatus() {
             var fLeastDelta: Double? = null
-            var fCurrentDelta: Double
-            for ( circle in arrZone ) {
-                // find the least delta between the device and a zone edge
-                fCurrentDelta = circleEdgeDelta(circle, this.location)
-                if ( fLeastDelta == null || fCurrentDelta < fLeastDelta ) {
-                    fLeastDelta = fCurrentDelta
-                }
-                if ( fLeastDelta < warnDistance ) {
-                    // we don't need to find the least. Just need to know it isn't outside/nearly outside the circle
-                    break
+            if ( this.location != null ) {
+                var fCurrentDelta: Double
+                for (circle in arrZone) {
+                    // find the least delta between the device and a zone edge
+                    fCurrentDelta = circleEdgeDelta(circle, this.location!!)
+                    if (fLeastDelta == null || fCurrentDelta < fLeastDelta) {
+                        fLeastDelta = fCurrentDelta
+                    }
+                    if (fLeastDelta < warnDistance) {
+                        // we don't need to find the least. Just need to know it isn't outside/nearly outside the circle
+                        break
+                    }
                 }
             }
 
@@ -185,9 +187,11 @@ class MapsActivity : AppCompatActivity(), OnMapReadyCallback {
                         }
                     }
                     runOnUiThread {
-                        bbDevice.updateLocation(arrLocationHistory)
-                        bbDevice.updateStatus()
+                        if ( arrLocationHistory.isNotEmpty() ) {
+                            bbDevice.updateLocation(arrLocationHistory)
+                        }
                         bbDevice.buildZone()
+                        bbDevice.updateStatus()
                         if ( bbDevice.status == RED ) {
                             pushNotification(
                                 "Device outside zone!",
